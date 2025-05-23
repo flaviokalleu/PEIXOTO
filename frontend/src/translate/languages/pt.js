@@ -183,6 +183,7 @@ const messages = {
           import: "Selecione o arquivo do excel para importar Contatos",
         },
       },
+      
       connections: {
         default:"Padrão",
         title: "Conexões",
@@ -193,12 +194,14 @@ const messages = {
         restartConnections: "Reiniciar Conexões",
         callSupport: "Chamar Suporte",
         newConnection: "Nova Conexão",
+        
         toasts: {
           deleted: "Conexão excluída com sucesso!",
           disconnected: "Conexão desconectada com sucesso!",
           closedimported:
             "Estamos fechando os tickets importados, por favor aguarde uns instantes",
         },
+        
         status:{
           connected:"Conectado :D",
           disconnected:"Desconectado :(",
@@ -228,6 +231,8 @@ const messages = {
           processed: "Processado",
           in: "de",
           connecting: "Conectando",
+          cancel:"Cancelar",
+          confirm:"Confirmar",  
         },
         typography: {
           processed: "Processado",

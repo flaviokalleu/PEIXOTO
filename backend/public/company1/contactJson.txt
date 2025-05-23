@@ -1052,6 +1052,10 @@
     "name": "Jones"
   },
   {
+    "id": "556196080740@s.whatsapp.net",
+    "name": "Amor"
+  },
+  {
     "id": "558488498399@s.whatsapp.net",
     "name": "Thalison Melo Revendedor Internet Netshark"
   },
@@ -1448,6 +1452,10 @@
     "name": "Adão Cliente Imobiliária"
   },
   {
+    "id": "556196551446@s.whatsapp.net",
+    "name": "It’s Life"
+  },
+  {
     "id": "556191903757@s.whatsapp.net",
     "name": "Letícia Cliente Imobiliária"
   },
@@ -1790,6 +1798,10 @@
   {
     "id": "556194369568@s.whatsapp.net",
     "name": "Yalan Cliente Imobiliária"
+  },
+  {
+    "id": "556192028486@s.whatsapp.net",
+    "name": "Diniz"
   },
   {
     "id": "556195719521@s.whatsapp.net",
