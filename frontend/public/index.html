@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700;800;900&display=swap" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400&display=swap" />
+  <link rel="stylesheet"
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&display=swap" />
+  <link rel="apple-touch-icon" href="%PUBLIC_URL%/apple-touch-icon.png" />
+  <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+  <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico">
+  <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes pulse {
+      0%, 100% { opacity: 0.6; }
+      50% { opacity: 1; }
+    }
+    
+    @keyframes dash {
+      to {
+        stroke-dashoffset: 0;
+      }
+    }
+    
+    .logo-path {
+      stroke-dasharray: 300;
+      stroke-dashoffset: 300;
+      animation: dash 3s ease-in-out forwards;
+    }
+    
+    .loading-text span {
+      display: inline-block;
+      animation: pulse 1.5s ease-in-out infinite;
+      animation-delay: calc(0.1s * var(--i));
+    }
+    
+    .progress-bar {
+      height: 2px;
+      width: 200px;
+      background: rgba(255, 255, 255, 0.1);
+      overflow: hidden;
+      position: relative;
+    }
+    
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #333 0%, #666 50%, #fff 100%);
+      transition: width 0.3s ease;
+    }
+  </style>
+  <script>
+    if (!crossOriginIsolated) SharedArrayBuffer = ArrayBuffer;
+  </script>
+</head>
+
+<body class="font-inter">
+  <!-- Splash Screen Elegante -->
+  <div id="splash-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-black z-50">
+    <div class="flex flex-col items-center text-center">
+      <!-- Logo animado SVG -->
+      <svg width="100" height="100" viewBox="0 0 100 100" class="mb-8">
+        <circle cx="50" cy="50" r="40" stroke="#333" stroke-width="1" fill="transparent" />
+        <path class="logo-path" d="M30,50 L45,65 L70,35" stroke="#fff" stroke-width="2" fill="transparent" />
+      </svg>
+      
+      <!-- Nome do sistema com efeito fade -->
+      <h1 class="text-3xl font-semibold text-white mb-10 font-jakarta opacity-90">WicketChat</h1>
+      
+      <!-- Barra de progresso estilizada -->
+      <div class="progress-bar rounded mb-8">
+        <div id="progress-bar" class="progress-fill"></div>
+      </div>
+      
+      <!-- Texto de carregamento animado -->
+      <div class="loading-text text-gray-400 text-sm tracking-widest uppercase">
+        <span style="--i:1">C</span>
+        <span style="--i:2">A</span>
+        <span style="--i:3">R</span>
+        <span style="--i:4">R</span>
+        <span style="--i:5">E</span>
+        <span style="--i:6">G</span>
+        <span style="--i:7">A</span>
+        <span style="--i:8">N</span>
+        <span style="--i:9">D</span>
+        <span style="--i:10">O</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interface Principal (mantida do código original) -->
+  <div id="root" class="hidden min-h-screen bg-gray-100">
+    <header class="bg-black text-white p-4 shadow-md">
+      <div class="container mx-auto flex justify-between items-center">
+        <h1 class="text-2xl font-bold font-jakarta">WicketChat</h1>
+        <nav>
+          <ul class="flex space-x-6">
+            <li><a href="#" class="hover:text-gray-300 transition">Início</a></li>
+            <li><a href="#" class="hover:text-gray-300 transition">Dashboard</a></li>
+            <li><a href="#" class="hover:text-gray-300 transition">Configurações</a></li>
+            <li><a href="#" class="hover:text-gray-300 transition">Sair</a></li>
+          </ul>
+        </nav>
+      </div>
+    </header>
+    <main class="container mx-auto p-6">
+      <section class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-xl font-semibold mb-4">Bem-vindo ao WicketChat</h2>
+        <p class="text-gray-600">
+          Esta é a interface principal do sistema WicketChat. Aqui você pode acessar dashboards, gerenciar configurações e muito mais.
+          Este é um modelo inicial que pode ser personalizado conforme suas necessidades.
+        </p>
+      </section>
+    </main>
+  </div>
+
+  <noscript>
+    <div class="text-center p-4 text-red-600">
+      Você precisa habilitar o JavaScript para executar este aplicativo.
+    </div>
+  </noscript>
+
+  <script>
+    // Lógica da barra de progresso aprimorada
+    let progress = 0;
+    const progressBar = document.getElementById('progress-bar');
+    const splashScreen = document.getElementById('splash-screen');
+    const root = document.getElementById('root');
+
+    const updateProgress = setInterval(() => {
+      if (progress < 50) {
+        progress += 5; // Mais rápido no início
+      } else if (progress < 85) {
+        progress += 2; // Velocidade média no meio
+      } else if (progress < 99) {
+        progress += 0.5; // Desacelera no final
+      }
+      
+      progressBar.style.width = `${progress}%`;
+
+      if (progress >= 100) {
+        clearInterval(updateProgress);
+        
+        // Fade out da splash screen
+        setTimeout(() => {
+          splashScreen.style.opacity = '0';
+          splashScreen.style.transition = 'opacity 0.8s ease';
+          
+          setTimeout(() => {
+            splashScreen.classList.add('hidden');
+            root.classList.remove('hidden');
+            // Adiciona um fade in suave para a interface principal
+            root.style.opacity = '0';
+            root.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => { root.style.opacity = '1'; }, 50);
+          }, 800);
+        }, 300);
+      }
+    }, 100);
+
+    // Função para forçar o término do progresso
+    window.finishProgress = () => {
+      progress = 100;
+      progressBar.style.width = '100%';
+      clearInterval(updateProgress);
+      
+      setTimeout(() => {
+        splashScreen.style.opacity = '0';
+        splashScreen.style.transition = 'opacity 0.8s ease';
+        
+        setTimeout(() => {
+          splashScreen.classList.add('hidden');
+          root.classList.remove('hidden');
+          // Adiciona um fade in suave para a interface principal
+          root.style.opacity = '0';
+          root.style.transition = 'opacity 0.5s ease';
+          setTimeout(() => { root.style.opacity = '1'; }, 50);
+        }, 800);
+      }, 300);
+    };
+  </script>
+</body>
+</html>
