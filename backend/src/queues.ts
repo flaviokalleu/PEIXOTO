@@ -3,6 +3,7 @@ import BullQueue from "bull";
 import { MessageData, SendMessage } from "./helpers/SendMessage";
 import Whatsapp from "./models/Whatsapp";
 import logger from "./utils/logger";
+import * as nodemailer from 'nodemailer';
 import moment from "moment";
 import Schedule from "./models/Schedule";
 import { Op, QueryTypes, Sequelize } from "sequelize";
@@ -1580,78 +1581,170 @@ async function handleWhatsapp() {
   }, null, false, 'America/Sao_Paulo')
   jobW.start();
 }
+
 async function handleInvoiceCreate() {
   const job = new CronJob('0 * * * * *', async () => {
+    try {
+      console.log('Running invoice creation job at:', moment().format());
 
+      // Fetch all companies
+      const companies = await Company.findAll();
 
-    const companies = await Company.findAll();
-    companies.map(async c => {
-      var dueDate = c.dueDate;
-      const date = moment(dueDate).format();
-      const timestamp = moment().format();
-      const hoje = moment(moment()).format("DD/MM/yyyy");
-      var vencimento = moment(dueDate).format("DD/MM/yyyy");
+      // Process each company
+      await Promise.all(companies.map(async (company) => {
+        const dueDate = moment(company.dueDate).format('DD/MM/yyyy');
+        const today = moment().format('DD/MM/yyyy');
+        const diff = moment(dueDate, 'DD/MM/yyyy').diff(moment(today, 'DD/MM/yyyy'));
+        const daysUntilDue = moment.duration(diff).asDays();
 
-      var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
-      var dias = moment.duration(diff).asDays();
+        // Check if due date is within 20 days
+        if (daysUntilDue < 20) {
+          const plan = await Plan.findByPk(company.planId);
+          if (!plan) {
+            console.warn(`No plan found for company ${company.id}`);
+            return;
+          }
 
-      if (dias < 20) {
-        const plan = await Plan.findByPk(c.planId);
-
-        const sql = `SELECT COUNT(*) mycount FROM "Invoices" WHERE "companyId" = ${c.id} AND "dueDate"::text LIKE '${moment(dueDate).format("yyyy-MM-DD")}%';`
-        const invoice = await sequelize.query(sql,
-          { type: QueryTypes.SELECT }
-        );
-        if (invoice[0]['mycount'] > 0) {
-
-        } else {
-          const sql = `INSERT INTO "Invoices" (detail, status, value, "updatedAt", "createdAt", "dueDate", "companyId")
-          VALUES ('${plan.name}', 'open', '${plan.amount}', '${timestamp}', '${timestamp}', '${date}', ${c.id});`
-
-          const invoiceInsert = await sequelize.query(sql,
-            { type: QueryTypes.INSERT }
+          // Check if invoice already exists for the due date
+          const sqlCheck = `
+            SELECT COUNT(*) as mycount 
+            FROM "Invoices" 
+            WHERE "companyId" = :companyId 
+            AND "dueDate"::text LIKE :dueDate;
+          `;
+          const invoice = await sequelize.query<{ mycount: number }>(
+            sqlCheck,
+            {
+              type: QueryTypes.SELECT,
+              replacements: {
+                companyId: company.id,
+                dueDate: `${moment(company.dueDate).format('yyyy-MM-DD')}%`,
+              },
+            }
           );
 
-/*           let transporter = nodemailer.createTransport({
-            service: 'gmail',
-            auth: {
-              user: 'email@gmail.com',
-              pass: 'senha'
+          if (invoice[0].mycount > 0) {
+            console.log(`Invoice already exists for company ${company.id} on due date ${dueDate}`);
+            return;
+          }
+
+          // Insert new invoice
+          const timestamp = moment().format();
+          const sqlInsert = `
+            INSERT INTO "Invoices" (detail, status, value, "updatedAt", "createdAt", "dueDate", "companyId")
+            VALUES (:detail, 'open', :value, :updatedAt, :createdAt, :dueDate, :companyId);
+          `;
+          await sequelize.query(
+            sqlInsert,
+            {
+              type: QueryTypes.INSERT,
+              replacements: {
+                detail: plan.name,
+                value: plan.amount, // Ensure plan.amount is a number in the database
+                updatedAt: timestamp,
+                createdAt: timestamp,
+                dueDate: moment(company.dueDate).format('yyyy-MM-DD'),
+                companyId: company.id,
+              },
             }
+          );
+          console.log(`Invoice created for company ${company.id}`);
+
+          // Configure email transporter
+          const transporter = nodemailer.createTransport({
+            host: process.env.MAIL_HOST,
+            port: Number(process.env.MAIL_PORT) || 587,
+            secure: process.env.SMTP_SECURE === 'true',
+            auth: {
+              user: process.env.MAIL_USER,
+              pass: process.env.MAIL_PASS,
+            },
           });
 
-          const mailOptions = {
-            from: 'heenriquega@gmail.com', // sender address
-            to: `${c.email}`, // receiver (use array of string for a list)
-            subject: 'Fatura gerada - Sistema', // Subject line
-            html: `Olá ${c.name} esté é um email sobre sua fatura!<br>
-<br>
-Vencimento: ${vencimento}<br>
-Valor: ${plan.value}<br>
-Link: ${process.env.FRONTEND_URL}/financeiro<br>
-<br>
-Qualquer duvida estamos a disposição!
-            `// plain text body
-          };
+          // Convert plan.amount to number for toFixed
+          const amount = typeof plan.amount === 'string' ? parseFloat(plan.amount) : plan.amount;
 
-          transporter.sendMail(mailOptions, (err, info) => {
-            if (err)
-              console.log(err)
-            else
-              console.log(info);
-          }); */
+          // HTML email template
+          const htmlContent = `
+  <div style="font-family: 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 40px 30px; background: linear-gradient(180deg, #ffffff, #f4f6f9); color: #333; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
+    
+    <!-- Logo -->
+    <div style="text-align: center; margin-bottom: 20px;">
+      <img src="${process.env.FRONTEND_URL}/logo.png" alt="Sua Empresa" style="max-width: 150px;">
+    </div>
 
+    <!-- Título -->
+    <div style="text-align: center; margin-bottom: 30px;">
+      <h1 style="color: #2c3e50; font-size: 26px; margin: 0;">🎉 Sua nova fatura está disponível</h1>
+      <p style="font-size: 16px; color: #555; margin-top: 8px;">Confira os detalhes abaixo</p>
+    </div>
+
+    <!-- Saudação -->
+    <p style="font-size: 16px;">Olá, <strong>${company.name}</strong>,</p>
+
+    <p style="font-size: 15px; line-height: 1.6;">
+      Uma nova fatura foi gerada para sua conta. Fique atento ao vencimento para evitar atrasos.
+    </p>
+
+    <!-- Bloco de Detalhes -->
+    <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; margin: 25px 0;">
+      <p style="margin: 12px 0; font-size: 15px;"><strong>🧾 Plano:</strong> ${plan.name}</p>
+      <p style="margin: 12px 0; font-size: 15px;"><strong>💰 Valor:</strong> <span style="color: #27ae60;">R$ ${amount.toFixed(2)}</span></p>
+      <p style="margin: 12px 0; font-size: 15px;"><strong>📅 Vencimento:</strong> ${dueDate}</p>
+    </div>
+
+    <!-- Botão -->
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${process.env.FRONTEND_URL}/financeiro" 
+         style="background-color: #2ecc71; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block; transition: background 0.3s;">
+        💼 Visualizar Fatura
+      </a>
+    </div>
+
+    <!-- Ajuda -->
+    <p style="font-size: 14px; color: #666; text-align: center;">
+      Precisa de ajuda? Nossa equipe está pronta para te atender.
+    </p>
+
+    <!-- Link alternativo -->
+    <p style="font-size: 13px; color: #888; margin-top: 30px;">
+      🔗 Se o botão acima não funcionar, copie e cole este link no navegador:<br>
+      <a href="${process.env.FRONTEND_URL}/financeiro" style="color: #3498db;">${process.env.FRONTEND_URL}/financeiro</a>
+    </p>
+
+    <!-- Rodapé -->
+    <hr style="border: none; border-top: 1px solid #ddd; margin: 40px 0;">
+
+    <footer style="text-align: center; font-size: 12px; color: #aaa;">
+      © ${new Date().getFullYear()} Sua Empresa. Todos os direitos reservados.<br>
+      <a href="${process.env.FRONTEND_URL}/suporte" style="color: #aaa; text-decoration: underline;">Suporte</a> |
+      <a href="${process.env.FRONTEND_URL}/politica-de-privacidade" style="color: #aaa; text-decoration: underline;">Política de Privacidade</a>
+    </footer>
+  </div>
+`;
+
+
+          // Send email
+          try {
+            await transporter.sendMail({
+              from: process.env.SMTP_FROM || process.env.MAIL_USER,
+              to: company.email,
+              subject: 'Fatura Gerada - Sistema',
+              text: `Olá ${company.name},\n\nUma nova fatura foi gerada!\n\nVencimento: ${dueDate}\nValor: R$ ${amount.toFixed(2)}\nLink: ${process.env.FRONTEND_URL}/financeiro\n\nQualquer dúvida, estamos à disposição!`,
+              html: htmlContent,
+            });
+            console.log(`Invoice email sent to ${company.email}`);
+          } catch (error) {
+            console.error(`Failed to send invoice email to ${company.email}:`, error);
+          }
         }
-
-
-
-
-
-      }
-
-    });
+      }));
+    } catch (error) {
+      console.error('Error in invoice creation job:', error);
+    }
   });
-  job.start()
+
+  job.start();
 }
 
 
