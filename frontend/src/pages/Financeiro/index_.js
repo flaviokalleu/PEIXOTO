@@ -14,6 +14,7 @@ import SubscriptionModal from "../../components/SubscriptionModal";
 import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import toastError from "../../errors/toastError";
+import AttachMoneyIcon from '@mui/icons-material/AttachMoney';
 
 import moment from "moment";
 
@@ -229,17 +230,29 @@ const Invoices = () => {
                   <TableCell align="center">
                     {rowStatus(invoices) !== "Pago" ?
                       <Button
+                        startIcon={<AttachMoneyIcon />}
                         size="small"
                         variant="outlined"
-                        color="secondary"
+                        style={{
+                        color: "white",
+                        backgroundColor: "#437db5",
+                        boxShadow: "none",
+                        borderRadius: 0
+                        }}
                         onClick={() => handleOpenContactModal(invoices)}
                       >
                         PAGAR
                       </Button> :
                       <Button
+                        startIcon={<AttachMoneyIcon />}
                         size="small"
                         variant="outlined"
-                      // color="secondary"
+                        style={{
+                        color: "white",
+                        backgroundColor: "#437db5",
+                        boxShadow: "none",
+                        borderRadius: 0
+                        }}
                       >
                         PAGO
                       </Button>}

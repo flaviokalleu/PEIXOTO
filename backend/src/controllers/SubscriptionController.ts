@@ -15,6 +15,7 @@ import Plan from "../models/Plan";
 import ListWhatsAppsService from "../services/WhatsappService/ListWhatsAppsService";
 import { StartWhatsAppSession } from "../services/WbotServices/StartWhatsAppSession";
 import * as Sentry from "@sentry/node";
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 
 // const app = express();
 
@@ -111,35 +112,36 @@ const valorext = price;
 
 async function createMercadoPagoPreference() {
   if (key_MP_ACCESS_TOKEN) {
-    const mercadopago = require("mercadopago");
-    mercadopago.configure({
-      access_token: key_MP_ACCESS_TOKEN
-    });
-
-    let preference = {
-      external_reference: String(invoiceId),
-      notification_url: String(process.env.MP_NOTIFICATION_URL),
-      items: [
-        {
-          title: `#Fatura:${invoiceId}`,
-          unit_price: valor,
-          quantity: 1
-        }
-      ]
-    };
-
     try {
-      const response = await mercadopago.preferences.create(preference);
-      //console.log("mercres", response);
-      let mercadopagoURLb = response.body.init_point;
-      //console.log("XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-      //console.log(mercadopagoURLb);
-      return mercadopagoURLb; // Retorna o valor para uso externo
+      // Nova API do MercadoPago
+      const client = new MercadoPagoConfig({ 
+        accessToken: key_MP_ACCESS_TOKEN 
+      });
+      const preference = new Preference(client);
+
+      const preferenceData = {
+        external_reference: String(invoiceId),
+        notification_url: String(process.env.MP_NOTIFICATION_URL),
+        items: [
+          {
+            id: `fatura-${invoiceId}`,
+            title: `#Fatura:${invoiceId}`,
+            unit_price: valor,
+            quantity: 1
+          }
+        ]
+      };
+
+      const response = await preference.create({ body: preferenceData });
+      const mercadopagoURLb = response.init_point;
+      
+      return mercadopagoURLb;
     } catch (error) {
-      console.log(error);
-      return null; // Em caso de erro, retorna null ou um valor padrão adequado
+      console.log("Erro ao criar preferência MercadoPago:", error);
+      return null;
     }
   }
+  return null;
 }
 
 const mercadopagoURL = await createMercadoPagoPreference();
@@ -468,125 +470,115 @@ return res.json({ ok: true });
   
 };
 
-
 export const mercadopagowebhook = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-
   //console.log(req.body);
   //console.log(req.params);
 
-
   let key_MP_ACCESS_TOKEN = null;
 
-
   try {
-    
     const buscacompanyId = 1;
-  
-  
+    
     const getmptoken = await Setting.findOne({
       where: { companyId: buscacompanyId, key: "mpaccesstoken" },
     });
     key_MP_ACCESS_TOKEN = getmptoken?.value;
-  
+    
   } catch (error) {
     console.error("Error retrieving settings:", error);
   }
 
-  const mercadopago = require("mercadopago");
-  mercadopago.configure({
-    access_token: key_MP_ACCESS_TOKEN,
-  });
-  
-  //console.log("*********************************");
-  //console.log(req.body.id);
-  //console.log("*********************************");
-
   if (req.body.action === "payment.updated") {
-  
-  
-  	try {
-    	const payment = await mercadopago.payment.get(req.body.data.id);
-    
-    	console.log('DETALHES DO PAGAMENTO:', payment.body);
-        console.log('ID DA FATURA:', payment.body.external_reference);
-    
-    	if(!payment.body.transaction_details.transaction_id){
-        	console.log('SEM PAGAMENTO:', payment.body.external_reference);
-        	return;
-        }
-
-    	const invoices = await Invoices.findOne({ where: { id: payment.body.external_reference } });
-		const invoiceID = invoices.id;
-    
-    	if (invoices && invoices.status === "paid") {
-        	console.log('FATURA JÁ PAGA');
-            return;
-        }
+    try {
+      // Nova API do MercadoPago para webhook
+      const client = new MercadoPagoConfig({ 
+        accessToken: key_MP_ACCESS_TOKEN 
+      });
       
-        const companyId = invoices.companyId;
-        const company = await Company.findByPk(companyId);
-    
-        const expiresAt = new Date(company.dueDate);
-        expiresAt.setDate(expiresAt.getDate() + 30);
-        const date = expiresAt.toISOString().split("T")[0];
+      // Usando axios para buscar detalhes do pagamento
+      const paymentResponse = await axios.get(
+        `https://api.mercadopago.com/v1/payments/${req.body.data.id}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${key_MP_ACCESS_TOKEN}`
+          }
+        }
+      );
+      
+      const payment = paymentResponse.data;
+      
+      console.log('DETALHES DO PAGAMENTO:', payment);
+      console.log('ID DA FATURA:', payment.external_reference);
+      
+      if(!payment.transaction_details?.transaction_id){
+        console.log('SEM PAGAMENTO:', payment.external_reference);
+        return;
+      }
 
-        if (company) {
-          await company.update({
-            dueDate: date
-          });
-         const invoi = await invoices.update({
-            id: invoiceID,
-            txid: payment.body.transaction_details.transaction_id,
-            status: 'paid'
-          });
-          await company.reload();
-          const io = getIO();
-          const companyUpdate = await Company.findOne({
-            where: {
-              id: companyId
-            }
-          });
+      const invoices = await Invoices.findOne({ where: { id: payment.external_reference } });
+      const invoiceID = invoices.id;
+      
+      if (invoices && invoices.status === "paid") {
+        console.log('FATURA JÁ PAGA');
+        return;
+      }
         
-          try {
-  
-    	    const companyId = company.id
-    		const whatsapps = await ListWhatsAppsService({ companyId: companyId });
-    		  if (whatsapps.length > 0) {
-      			  whatsapps.forEach(whatsapp => {
-        		  StartWhatsAppSession(whatsapp, companyId);
-      			});
-    		  }
-  		  } catch (e) {
-    	  	Sentry.captureException(e);
-  		  }
+      const companyId = invoices.companyId;
+      const company = await Company.findByPk(companyId);
+      
+      const expiresAt = new Date(company.dueDate);
+      expiresAt.setDate(expiresAt.getDate() + 30);
+      const date = expiresAt.toISOString().split("T")[0];
 
-         io.emit(`company-${companyId}-payment`, {
-            action: 'CONCLUIDA',
-            company: companyUpdate
+      if (company) {
+        await company.update({
+          dueDate: date
+        });
+       const invoi = await invoices.update({
+          id: invoiceID,
+          txid: payment.transaction_details.transaction_id,
+          status: 'paid'
+        });
+        await company.reload();
+        const io = getIO();
+        const companyUpdate = await Company.findOne({
+          where: {
+            id: companyId
+          }
+        });
+      
+        try {
+          const companyId = company.id
+      const whatsapps = await ListWhatsAppsService({ companyId: companyId });
+        if (whatsapps.length > 0) {
+            whatsapps.forEach(whatsapp => {
+          StartWhatsAppSession(whatsapp, companyId);
           });
         }
+        } catch (e) {
+          Sentry.captureException(e);
+        }
 
-    	res.status(200).json(payment.body);
-  	} catch (error) {
-    	console.error('Erro ao tentar ler o pagamento:', error);
-    	res.status(500).json({ error: 'Erro ao identificar o pagamento' });
-  	}  
-  
-  
+       io.emit(`company-${companyId}-payment`, {
+          action: 'CONCLUIDA',
+          company: companyUpdate
+        });
+      }
+
+      res.status(200).json(payment);
+    } catch (error) {
+      console.error('Erro ao tentar ler o pagamento:', error);
+      res.status(500).json({ error: 'Erro ao identificar o pagamento' });
+    }  
   }
-
-  
 };
-
 
 export const asaaswebhook = async (
   req: Request,
   res: Response
 ): Promise<void> => {
-
   res.status(200).json(req.body);
-
 };
