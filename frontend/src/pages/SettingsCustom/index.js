@@ -157,7 +157,7 @@ const SettingsCustom = () => {
               {isSuper() ? <Tab label={i18n.t("settings.tabs.plans")} value={"plans"} /> : null}
               {isSuper() ? <Tab label={i18n.t("settings.tabs.helps")} value={"helps"} /> : null}
               {isSuper() ? <Tab label="Whitelabel" value={"whitelabel"} /> : null}
-              {isSuper() ? <Tab label="Certificado Efí PIX" value={"uploadercert"} /> : null}
+              
             </Tabs>
             <Paper className={classes.paper} elevation={0}>
               <TabPanel

@@ -1235,7 +1235,7 @@ export default function Options(props) {
       )}
 
       
-      <Grid spacing={3} container>
+      {/*<Grid spacing={3} container>
       {isSuper() ?
               <Tabs
                 indicatorColor='primary'
@@ -1314,7 +1314,7 @@ export default function Options(props) {
                 </FormControl>
                 : null}
               </Grid>
-            </Grid>
+            </Grid>*/}
 
             <Grid spacing={3} container>
             {isSuper() ?
@@ -1357,7 +1357,7 @@ export default function Options(props) {
               </Grid>
             </Grid>
 
-            <Grid spacing={3} container>
+            {/*<Grid spacing={3} container>
             {isSuper() ?
               <Tabs
                 indicatorColor='primary'
@@ -1437,7 +1437,7 @@ export default function Options(props) {
                 </FormControl>
                 : null}
               </Grid>
-            </Grid>
+            </Grid>*/}
 
             <Grid spacing={3} container>
             {isSuper() ?

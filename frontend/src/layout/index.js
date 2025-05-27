@@ -352,13 +352,13 @@ const LoggedInLayout = ({ children, themeToggle }) => {
       else setProfileUrl(`${process.env.FRONTEND_URL}/nopicture.png`);
 
       const onCompanyAuthLayout = (data) => {
-        if (data.user.id === +userId) {
+        /*if (data.user.id === +userId) {
           toastError("Sua conta foi acessada em outro computador.");
           setTimeout(() => {
             localStorage.clear();
             window.location.reload();
           }, 1000);
-        }
+        }*/
       }
 
       socket.on(`company-${companyId}-auth`, onCompanyAuthLayout);

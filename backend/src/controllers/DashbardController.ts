@@ -1,205 +1,284 @@
 import { Request, Response } from "express";
-import DashboardDataService from "../services/ReportService/DashbardDataService"; // Use default import and fix typo in path
+import DashboardDataService from "../services/ReportService/DashbardDataService";
 import { TicketsAttendance } from "../services/ReportService/TicketsAttendance";
 import { TicketsDayService } from "../services/ReportService/TicketsDayService";
 import TicketsQueuesService from "../services/TicketServices/TicketsQueuesService";
 
-// Define the Params type (if not exported from DashboardDataService)
+// Interfaces
 interface Params {
   date_from?: string;
   date_to?: string;
-  [key: string]: any; // Allow additional query params
+  [key: string]: any;
 }
 
-// Define the Attendant interface to match the data structure
 interface Attendant {
   id: number;
   name: string;
   online: boolean;
-  rating: number;
-  tickets: number;
-  avgWaitTime: number | null;
-  countRating: number;
-  avgSupportTime: number | null;
+  rating: number; // Pontuação (ex: 7.5)
+  tickets: number; // Total de Atendimentos
+  avgWaitTime: number | null; // T.M. de Espera em minutos
+  countRating: number; // Atendimentos avaliados
+  avgSupportTime: number | null; // T.M. de Atendimento em minutos
 }
 
-// Define the DashboardData interface to match the data structure
+interface Counters {
+  leads: number;
+  npsScore: number;
+  percRating: number;
+  waitRating: number;
+  withRating: number;
+  avgWaitTime: number | null;
+  activeTickets: number;
+  supportGroups: number;
+  withoutRating: number;
+  avgSupportTime: number | null;
+  npsPassivePerc: number;
+  passiveTickets: number;
+  supportPending: number;
+  supportFinished: number;
+  npsPromotersPerc: number;
+  supportHappening: number;
+  npsDetractorsPerc: number;
+}
+
 interface DashboardData {
-  counters: {
-    leads: number;
-    npsScore: number;
-    percRating: number;
-    waitRating: number;
-    withRating: number;
-    avgWaitTime: number | null;
-    activeTickets: number;
-    supportGroups: number;
-    withoutRating: number;
-    avgSupportTime: number | null;
-    npsPassivePerc: number;
-    passiveTickets: number;
-    supportPending: number;
-    supportFinished: number;
-    npsPromotersPerc: number;
-    supportHappening: number;
-    npsDetractorsPerc: number;
-  };
+  counters: Counters;
   attendants: Attendant[];
 }
 
-type IndexQuery = {
-  initialDate: string;
-  finalDate: string;
-  companyId: number | any;
-};
-
-type IndexQueryPainel = {
-  dateStart: string;
-  dateEnd: string;
-  status: string[];
-  queuesIds: string[];
-  showAll: string;
-};
-
-// Function to recalculate counters automatically
-const recalculateCounters = (dashboardData: DashboardData): DashboardData => {
-  const { attendants, counters } = dashboardData;
-
-  // Calculate totals based on attendants
-  const totalRatings = attendants.reduce((sum, att: Attendant) => sum + (att.countRating || 0), 0);
-  const totalTickets = attendants.reduce((sum, att: Attendant) => sum + (att.tickets || 0), 0);
-
-  // Calculate average wait and support times
-  const validWaitTimes = attendants
-    .map((att: Attendant) => att.avgWaitTime)
-    .filter((time): time is number => time !== null && time !== undefined && !isNaN(time) && time > 0);
-
-  const validSupportTimes = attendants
-    .map((att: Attendant) => att.avgSupportTime)
-    .filter((time): time is number => time !== null && time !== undefined && !isNaN(time) && time > 0);
-
-  const avgWaitTime = validWaitTimes.length > 0
-    ? Math.round(validWaitTimes.reduce((sum, time) => sum + time, 0) / validWaitTimes.length)
-    : null;
-
-  const avgSupportTime = validSupportTimes.length > 0
-    ? Math.round(validSupportTimes.reduce((sum, time) => sum + time, 0) / validSupportTimes.length)
-    : null;
-
-  // Calculate NPS based on attendant ratings
-  let npsScore = 0;
-  let npsPromotersPerc = 0;
-  let npsPassivePerc = 0;
-  let npsDetractorsPerc = 0;
-
-  if (totalRatings > 0) {
-    let promoters = 0;
-    let passive = 0;
-    let detractors = 0;
-
-    attendants.forEach((att: Attendant) => {
-      if (att.countRating > 0) {
-        if (att.rating >= 9) {
-          promoters += att.countRating;
-        } else if (att.rating >= 7 && att.rating <= 8) {
-          passive += att.countRating;
-        } else if (att.rating <= 6) {
-          detractors += att.countRating;
-        }
-      }
-    });
-
-    npsPromotersPerc = Math.round((promoters / totalRatings) * 100);
-    npsPassivePerc = Math.round((passive / totalRatings) * 100);
-    npsDetractorsPerc = Math.round((detractors / totalRatings) * 100);
-    npsScore = npsPromotersPerc - npsDetractorsPerc;
+// Função simples para calcular NPS baseado na tabela de atendentes
+const calculateSimpleNPS = (attendants: Attendant[]) => {
+  console.log("🔢 Calculando NPS com dados dos atendentes:");
+  
+  // Filtrar apenas atendentes que tem avaliações
+  const attendantsWithRatings = attendants.filter(att => att.countRating > 0 && att.rating > 0);
+  
+  if (attendantsWithRatings.length === 0) {
+    console.log("❌ Nenhum atendente com avaliações encontrado");
+    return {
+      totalRatings: 0,
+      totalTickets: 0,
+      npsScore: 0,
+      npsPromotersPerc: 0,
+      npsPassivePerc: 0,
+      npsDetractorsPerc: 0,
+      avgWaitTime: null,
+      avgSupportTime: null,
+      percRating: 0
+    };
   }
 
-  // Calculate percentage of ratings
-  const percRating = totalTickets > 0 ? Math.round((totalRatings / totalTickets) * 100) : 0;
+  let totalPromotores = 0;
+  let totalNeutros = 0;
+  let totalDetratores = 0;
+  let totalAvaliacoes = 0;
+  let totalAtendimentos = 0;
+  let temposEspera = [];
+  let temposAtendimento = [];
 
-  // Recalculate corrected counters
-  const correctedCounters = {
-    ...counters,
-    withRating: totalRatings,
-    withoutRating: Math.max(0, totalTickets - totalRatings),
-    percRating,
-    avgWaitTime,
-    avgSupportTime,
-    npsScore,
-    npsPromotersPerc,
-    npsPassivePerc,
-    npsDetractorsPerc,
-    waitRating: avgWaitTime || 0
-  };
+  // Para cada atendente, classificar suas avaliações
+  attendantsWithRatings.forEach(attendant => {
+    const { name, rating, countRating, tickets, avgWaitTime, avgSupportTime } = attendant;
+    
+    console.log(`👤 ${name}: Nota ${rating}, ${countRating} avaliações de ${tickets} atendimentos`);
+    
+    // Contar total de tickets e avaliações
+    totalAvaliacoes += countRating;
+    totalAtendimentos += tickets;
+    
+    // Classificar baseado na nota do atendente (escala 0-10)
+    if (rating >= 6) {
+      // Promotores: notas 9-10
+      totalPromotores += countRating;
+      console.log(`  ✅ ${countRating} promotores (nota ${rating})`);
+    } else if (rating >= 5) {
+      // Neutros: notas 7-8
+      totalNeutros += countRating;
+      console.log(`  😐 ${countRating} neutros (nota ${rating})`);
+    } else {
+      // Detratores: notas 0-6
+      totalDetratores += countRating;
+      console.log(`  ❌ ${countRating} detratores (nota ${rating})`);
+    }
+    
+    // Coletar tempos para média
+    if (avgWaitTime && avgWaitTime > 0) {
+      temposEspera.push(avgWaitTime);
+    }
+    if (avgSupportTime && avgSupportTime > 0) {
+      temposAtendimento.push(avgSupportTime);
+    }
+  });
+
+  // Calcular percentuais
+  const promotoresPerc = totalAvaliacoes > 0 ? Math.round((totalPromotores / totalAvaliacoes) * 100) : 0;
+  const neutrosPerc = totalAvaliacoes > 0 ? Math.round((totalNeutros / totalAvaliacoes) * 100) : 0;
+  const detratoresPerc = totalAvaliacoes > 0 ? Math.round((totalDetratores / totalAvaliacoes) * 100) : 0;
+
+  // NPS = % Promotores - % Detratores
+  const npsScore = promotoresPerc - detratoresPerc;
+
+  // Calcular médias de tempo
+  const avgWaitTime = temposEspera.length > 0 
+    ? Math.round(temposEspera.reduce((a, b) => a + b, 0) / temposEspera.length) 
+    : null;
+
+  const avgSupportTime = temposAtendimento.length > 0 
+    ? Math.round(temposAtendimento.reduce((a, b) => a + b, 0) / temposAtendimento.length) 
+    : null;
+
+  // Percentual de avaliações
+  const percRating = totalAtendimentos > 0 ? Math.round((totalAvaliacoes / totalAtendimentos) * 100) : 0;
+
+  console.log("📊 Resultado final:");
+  console.log(`  📈 NPS Score: ${npsScore}`);
+  console.log(`  💚 Promotores: ${totalPromotores} (${promotoresPerc}%)`);
+  console.log(`  😐 Neutros: ${totalNeutros} (${neutrosPerc}%)`);
+  console.log(`  💔 Detratores: ${totalDetratores} (${detratoresPerc}%)`);
+  console.log(`  📋 Total avaliações: ${totalAvaliacoes} de ${totalAtendimentos} atendimentos (${percRating}%)`);
 
   return {
-    ...dashboardData,
-    counters: correctedCounters
+    totalRatings: totalAvaliacoes,
+    totalTickets: totalAtendimentos,
+    npsScore,
+    npsPromotersPerc: promotoresPerc,
+    npsPassivePerc: neutrosPerc,
+    npsDetractorsPerc: detratoresPerc,
+    avgWaitTime,
+    avgSupportTime,
+    percRating
   };
 };
 
+// Função para corrigir os contadores
+const fixDashboardCounters = (originalData: DashboardData): DashboardData => {
+  const { attendants, counters } = originalData;
+
+  console.log("🔧 Corrigindo contadores do dashboard...");
+  console.log(`📋 Dados originais: ${attendants.length} atendentes`);
+
+  // Calcular métricas corretas
+  const metrics = calculateSimpleNPS(attendants);
+
+  // Criar contadores corrigidos mantendo os valores originais que não calculamos
+  const fixedCounters = {
+    ...counters, // Manter valores originais
+    // Sobrescrever apenas os que calculamos
+    npsScore: metrics.npsScore,
+    npsPromotersPerc: metrics.npsPromotersPerc,
+    npsPassivePerc: metrics.npsPassivePerc,
+    npsDetractorsPerc: metrics.npsDetractorsPerc,
+    withRating: metrics.totalRatings,
+    withoutRating: Math.max(0, metrics.totalTickets - metrics.totalRatings),
+    percRating: metrics.percRating,
+    avgWaitTime: metrics.avgWaitTime,
+    avgSupportTime: metrics.avgSupportTime,
+    waitRating: metrics.avgWaitTime || 0
+  };
+
+  console.log("✅ Contadores corrigidos com sucesso!");
+
+  return {
+    ...originalData,
+    counters: fixedCounters
+  };
+};
+
+// Controllers
 export const index = async (req: Request, res: Response): Promise<Response> => {
   try {
     const params: Params = req.query;
     const { companyId } = req.user;
 
-    console.log("Dashboard request params:", { companyId, params });
+    console.log("📡 Requisição dashboard:", { companyId, params });
 
-    // Fetch original data
+    // Buscar dados originais do serviço
     const originalData: DashboardData = await DashboardDataService(companyId, params);
     
-    console.log("Original dashboard data:", originalData);
-
-    // Recalculate counters automatically
-    const correctedData = recalculateCounters(originalData);
-
-    console.log("Corrected dashboard data:", correctedData);
-
-    // Check for inconsistencies
-    const hasInconsistencies = 
-      correctedData.attendants.some((attendant: Attendant) => attendant.rating > 0 && attendant.countRating > 0) &&
-      correctedData.counters.withRating === 0;
-
-    if (hasInconsistencies) {
-      console.warn("⚠️ Inconsistencies still detected after correction!");
-    } else {
-      console.log("✅ Counters corrected successfully!");
+    console.log("📊 Dados recebidos do serviço:");
+    console.log(`  👥 Atendentes: ${originalData.attendants?.length || 0}`);
+    console.log(`  📈 NPS original: ${originalData.counters?.npsScore || 0}`);
+    
+    // Exemplo de log dos primeiros atendentes para debug
+    if (originalData.attendants?.length > 0) {
+      console.log("👤 Primeiros atendentes:");
+      originalData.attendants.slice(0, 3).forEach(att => {
+        console.log(`  - ${att.name}: ${att.rating}/10, ${att.countRating} avaliações, ${att.tickets} atendimentos`);
+      });
     }
 
+    // Corrigir os dados usando nossa lógica simples
+    const correctedData = fixDashboardCounters(originalData);
+
     return res.status(200).json(correctedData);
+
   } catch (error) {
-    console.error("Error in dashboard index:", error);
-    return res.status(500).json({ error: "Failed to fetch dashboard data" });
+    console.error("❌ Erro no dashboard:", error);
+    return res.status(500).json({ 
+      error: "Falha ao buscar dados do dashboard",
+      message: error instanceof Error ? error.message : "Erro desconhecido"
+    });
   }
 };
 
 export const reportsUsers = async (req: Request, res: Response): Promise<Response> => {
-  const { initialDate, finalDate, companyId } = req.query as IndexQuery;
-  const { data } = await TicketsAttendance({ initialDate, finalDate, companyId });
-  return res.json({ data });
+  try {
+    const { initialDate, finalDate, companyId } = req.query as unknown as {
+      initialDate: string;
+      finalDate: string;
+      companyId: number;
+    };
+    
+    const { data } = await TicketsAttendance({ initialDate, finalDate, companyId });
+    return res.json({ data });
+  } catch (error) {
+    console.error("❌ Erro em reportsUsers:", error);
+    return res.status(500).json({ error: "Falha ao buscar relatório de usuários" });
+  }
 };
 
 export const reportsDay = async (req: Request, res: Response): Promise<Response> => {
-  const { initialDate, finalDate, companyId } = req.query as IndexQuery;
-  const { count, data } = await TicketsDayService({ initialDate, finalDate, companyId });
-  return res.json({ count, data });
+  try {
+    const { initialDate, finalDate, companyId } = req.query as unknown as {
+      initialDate: string;
+      finalDate: string;
+      companyId: number;
+    };
+    
+    const { count, data } = await TicketsDayService({ initialDate, finalDate, companyId });
+    return res.json({ count, data });
+  } catch (error) {
+    console.error("❌ Erro em reportsDay:", error);
+    return res.status(500).json({ error: "Falha ao buscar relatório diário" });
+  }
 };
 
 export const DashTicketsQueues = async (req: Request, res: Response): Promise<Response> => {
-  const { companyId, profile, id: userId } = req.user;
-  const { dateStart, dateEnd, status, queuesIds, showAll } = req.query as IndexQueryPainel;
-  
-  const tickets = await TicketsQueuesService({
-    showAll: profile === "admin" ? showAll : false,
-    dateStart,
-    dateEnd,
-    status,
-    queuesIds,
-    userId,
-    companyId,
-    profile,
-  });
-  
-  return res.status(200).json(tickets);
+  try {
+    const { companyId, profile, id: userId } = req.user;
+    const { dateStart, dateEnd, status, queuesIds, showAll } = req.query as unknown as {
+      dateStart: string;
+      dateEnd: string;
+      status: string[];
+      queuesIds: string[];
+      showAll: string;
+    };
+    
+    const tickets = await TicketsQueuesService({
+      showAll: profile === "admin" ? showAll : false,
+      dateStart,
+      dateEnd,
+      status,
+      queuesIds,
+      userId,
+      companyId,
+      profile,
+    });
+    
+    return res.status(200).json(tickets);
+  } catch (error) {
+    console.error("❌ Erro em DashTicketsQueues:", error);
+    return res.status(500).json({ error: "Falha ao buscar tickets das filas" });
+  }
 };
