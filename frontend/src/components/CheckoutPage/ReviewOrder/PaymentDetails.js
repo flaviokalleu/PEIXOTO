@@ -6,7 +6,7 @@ import { AuthContext } from "../../../context/Auth/AuthContext";
 function PaymentDetails(props) {
   const { formValues } = props;
   const classes = useStyles();
-  const { firstName, address2, city, zipcode, state, country, plan } = formValues;
+  const { firstName, zipcode, plan } = formValues;
   const { user } = useContext(AuthContext);
 
 

@@ -1,26 +1,13 @@
 import React, { useState, useEffect, useReducer, useContext } from "react";
-
 import { toast } from "react-toastify";
 import { useHistory } from "react-router-dom";
-
 import { makeStyles } from "@material-ui/core/styles";
-
 import Paper from "@material-ui/core/Paper";
-import Avatar from "@material-ui/core/Avatar";
-import WhatsAppIcon from "@material-ui/icons/WhatsApp";
 import SearchIcon from "@material-ui/icons/Search";
 import TextField from "@material-ui/core/TextField";
 import InputAdornment from "@material-ui/core/InputAdornment";
-
-import IconButton from "@material-ui/core/IconButton";
-import DeleteOutlineIcon from "@material-ui/icons/DeleteOutline";
-import EditIcon from "@material-ui/icons/Edit";
-
 import api from "../../services/api";
-import TableRowSkeleton from "../../components/TableRowSkeleton";
-import ContactModal from "../../components/ContactModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
-
 import { i18n } from "../../translate/i18n";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
@@ -28,30 +15,11 @@ import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper"
 import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
-import { Can } from "../../components/Can";
 import NewTicketModal from "../../components/NewTicketModal";
 import { SocketContext } from "../../context/Socket/SocketContext";
-import WebhookModal from "../../components/WebhookModal";
-import {
-  AddCircle,
-  Build,
-  ContentCopy,
-  DevicesFold,
-  MoreVert,
-  WebhookOutlined
-} from "@mui/icons-material";
-
-import {
-  Button,
-  CircularProgress,
-  Grid,
-  Menu,
-  MenuItem,
-  Stack
-} from "@mui/material";
-
+import { AddCircle, DevicesFold, MoreVert } from "@mui/icons-material";
+import { Button, CircularProgress, Grid, Menu, MenuItem, Stack } from "@mui/material";
 import FlowBuilderModal from "../../components/FlowBuilderModal";
-
 import {
   colorBackgroundTable,
   colorLineTable,
@@ -133,7 +101,6 @@ const FlowBuilder = () => {
   const [deletingContact, setDeletingContact] = useState(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmDuplicateOpen, setConfirmDuplicateOpen] = useState(false);
-
   const [hasMore, setHasMore] = useState(false);
   const [reloadData, setReloadData] = useState(false);
   const { user, socket } = useContext(AuthContext);
@@ -163,26 +130,23 @@ const FlowBuilder = () => {
   }, [searchParam, pageNumber, reloadData]);
 
   useEffect(() => {
-    const companyId = user.companyId
-   
+    const companyId = user.companyId;
 
-   const onContact = (data) => {
-    if (data.action === "update" || data.action === "create") {
-      dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
-    }
+    const onContact = (data) => {
+      if (data.action === "update" || data.action === "create") {
+        dispatch({ type: "UPDATE_CONTACTS", payload: data.contact });
+      }
 
-    if (data.action === "delete") {
-      dispatch({ type: "DELETE_CONTACT", payload: +data.contactId });
-    }
-  }
-  
-  socket.on(`company-${companyId}-contact`, onContact);
+      if (data.action === "delete") {
+        dispatch({ type: "DELETE_CONTACT", payload: +data.contactId });
+      }
+    };
 
-  return () => {
-    socket.disconnect();
-  };
+    socket.on(`company-${companyId}-contact`, onContact);
 
-
+    return () => {
+      socket.disconnect();
+    };
   }, []);
 
   const handleSearch = event => {
@@ -249,7 +213,6 @@ const FlowBuilder = () => {
   };
 
   const [anchorEl, setAnchorEl] = useState(null);
-
   const open = Boolean(anchorEl);
 
   const handleClick = event => {
@@ -261,8 +224,8 @@ const FlowBuilder = () => {
   };
 
   const exportLink = () => {
-    history.push(`/flowbuilder/${deletingContact.id}`)
-  }
+    history.push(`/flowbuilder/${deletingContact.id}`);
+  };
 
   return (
     <MainContainer className={classes.mainContainer}>
@@ -365,7 +328,7 @@ const FlowBuilder = () => {
           </Grid>
           <>
             {webhooks.map(contact => (
-              <Grid               
+              <Grid
                 container
                 key={contact.id}
                 sx={{
@@ -378,7 +341,7 @@ const FlowBuilder = () => {
                   }
                 }}
               >
-                <Grid item xs={4}  onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
+                <Grid item xs={4} onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
                   <Stack
                     justifyContent={"center"}
                     height={"100%"}
@@ -392,7 +355,7 @@ const FlowBuilder = () => {
                     </Stack>
                   </Stack>
                 </Grid>
-                <Grid item xs={4} align="center" style={{ color: "#ededed" }}  onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
+                <Grid item xs={4} align="center" style={{ color: "#ededed" }} onClick={() => history.push(`/flowbuilder/${contact.id}`)}>
                   <Stack justifyContent={"center"} height={"100%"}>
                     {contact.active ? "Ativo" : "Desativado"}
                   </Stack>
@@ -413,44 +376,6 @@ const FlowBuilder = () => {
                       sx={{ color: "#ededed", width: "21px", height: "21px" }}
                     />
                   </Button>
-                  {/* <IconButton
-                    size="small"
-                    onClick={() => hadleEditContact(contact.id, contact.name)}
-                  >
-                    <EditIcon style={{ color: "#ededed" }} />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={e => {
-                      setConfirmDuplicateOpen(true);
-                      setDeletingContact(contact);
-                    }}
-                  >
-                    <ContentCopy style={{ color: "#ededed" }} />
-                  </IconButton>
-                  <IconButton
-                    size="small"
-                    onClick={() => history.push(`/flowbuilder/${contact.id}`)}
-                  >
-                    <Stack sx={{ width: 24 }}>
-                      <Build sx={{ width: 20, color: "#ededed" }} />
-                    </Stack>
-                  </IconButton>
-                  <Can
-                    role={user.profile}
-                    perform="contacts-page:deleteContact"
-                    yes={() => (
-                      <IconButton
-                        size="small"
-                        onClick={e => {
-                          setConfirmOpen(true);
-                          setDeletingContact(contact);
-                        }}
-                      >
-                        <DeleteOutlineIcon style={{ color: "#ededed" }} />
-                      </IconButton>
-                    )}
-                  /> */}
                 </Grid>
               </Grid>
             ))}
@@ -458,28 +383,28 @@ const FlowBuilder = () => {
               id="basic-menu"
               anchorEl={anchorEl}
               open={open}
-              sx={{borderRadius: '40px'}}
+              sx={{ borderRadius: '40px' }}
               onClose={handleClose}
               MenuListProps={{
                 "aria-labelledby": "basic-button"
               }}
             >
               <MenuItem onClick={() => {
-                handleClose()
-                hadleEditContact()
-                }}>Editar nome</MenuItem>
+                handleClose();
+                hadleEditContact();
+              }}>Editar nome</MenuItem>
               <MenuItem onClick={() => {
-                handleClose()
-                exportLink()
-                }}>Editar fluxo</MenuItem>
+                handleClose();
+                exportLink();
+              }}>Editar fluxo</MenuItem>
               <MenuItem onClick={() => {
-                handleClose()
+                handleClose();
                 setConfirmDuplicateOpen(true);
-                }}>Duplicar</MenuItem>
+              }}>Duplicar</MenuItem>
               <MenuItem onClick={() => {
-                handleClose()
+                handleClose();
                 setConfirmOpen(true);
-                }}>Excluir</MenuItem>
+              }}>Excluir</MenuItem>
             </Menu>
             {loading && (
               <Stack

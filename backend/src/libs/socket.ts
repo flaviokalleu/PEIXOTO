@@ -3,186 +3,85 @@ import { Server } from "http";
 import AppError from "../errors/AppError";
 import logger from "../utils/logger";
 import { instrument } from "@socket.io/admin-ui";
-import { z } from "zod";
-import jwt from "jsonwebtoken";
-
-// Define allowed namespaces
-const ALLOWED_NAMESPACES = /^\/workspace-\d+$/;
-
-// Validation schemas
-const userIdSchema = z.string().uuid().optional();
-const ticketIdSchema = z.string().uuid();
-const statusSchema = z.enum(["open", "closed", "pending"]);
-const jwtPayloadSchema = z.object({
-  userId: z.string().uuid(),
-  iat: z.number().optional(),
-  exp: z.number().optional(),
-});
-
-// Allowed CORS origins
-const ALLOWED_ORIGINS = process.env.FRONTEND_URL
-  ? process.env.FRONTEND_URL.split(",").map((url) => url.trim())
-  : ["http://localhost:3000"];
-
-// Custom error class for Socket.IO compatibility
-class SocketCompatibleAppError extends Error {
-  constructor(public message: string, public statusCode: number) {
-    super(message);
-    this.name = "AppError";
-    Error.captureStackTrace?.(this, SocketCompatibleAppError);
-  }
-}
+import User from "../models/User";
+import jwt from "jsonwebtoken"; // <== IMPORTANTE
 
 let io: SocketIO;
 
 export const initIO = (httpServer: Server): SocketIO => {
   io = new SocketIO(httpServer, {
     cors: {
-      origin: (origin, callback) => {
-        if (!origin || ALLOWED_ORIGINS.includes(origin)) {
-          callback(null, true);
-        } else {
-          logger.warn(`Unauthorized origin: ${origin}`);
-          callback(new SocketCompatibleAppError("CORS policy violation", 403));
-        }
-      },
-      methods: ["GET", "POST"],
-      credentials: true,
-    },
-    maxHttpBufferSize: 1e6, // 1MB payload limit
-    pingTimeout: 20000,
-    pingInterval: 25000,
+      origin: process.env.FRONTEND_URL
+    }
   });
 
-  // JWT authentication middleware
+  // ✅ Middleware de autenticação por token
   io.use((socket, next) => {
     const token = socket.handshake.query.token as string;
-    // Allow connections without token for public events (optional)
+
     if (!token) {
-      logger.warn("Connection attempt without token");
-      socket.data.user = null; // Allow unauthenticated access
-      return next();
+      return next(new Error("Token ausente"));
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET || "default_secret");
-      const validatedPayload = jwtPayloadSchema.parse(decoded);
-      socket.data.user = validatedPayload;
-      next();
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      socket.data.user = decoded;
+      return next();
     } catch (err) {
-      logger.warn("Invalid token");
-      return next(new SocketCompatibleAppError("Invalid token", 401));
+      return next(new Error("Token inválido"));
     }
   });
 
-  // Admin UI for development
-  const isAdminEnabled = process.env.SOCKET_ADMIN === "true" && process.env.NODE_ENV !== "production";
-  if (isAdminEnabled && process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
-    try {
+  // ✅ Verificação da origem (opcional)
+  io.engine.on("headers", (headers, req) => {
+    const origin = req.headers.origin || req.headers.referer;
+    const allowedOrigins = [process.env.FRONTEND_URL];
+
+    if (origin && !allowedOrigins.includes(origin)) {
+      console.warn("WebSocket bloqueado de origem não autorizada:", origin);
+      req.destroy();
+    }
+  });
+
+  if (process.env.SOCKET_ADMIN && JSON.parse(process.env.SOCKET_ADMIN)) {
+    User.findByPk(1).then((adminUser) => {
       instrument(io, {
         auth: {
           type: "basic",
-          username: process.env.ADMIN_USERNAME,
-          password: process.env.ADMIN_PASSWORD,
+          username: adminUser.email,
+          password: adminUser.passwordHash
         },
-        mode: "development",
-        readonly: true,
+        mode: "development"
       });
-      logger.info("Socket.IO Admin UI initialized in development mode");
-    } catch (error) {
-      logger.error("Failed to initialize Socket.IO Admin UI", error);
-    }
-  } else if (isAdminEnabled) {
-    logger.warn("Admin credentials missing, Admin UI not initialized");
+    });
   }
 
-  // Root namespace (/) for general events like company-${companyId}-whatsapp
-  io.of("/").on("connection", (socket) => {
-    const clientIp = socket.handshake.address;
-    logger.info(`Client connected to root namespace (IP: ${clientIp})`);    
+  const workspaces = io.of(/^\/\w+$/);
+  workspaces.on("connection", socket => {
+    const { userId } = socket.handshake.query;
 
-    socket.on("error", (error) => {
-      logger.error(`Error in root namespace: ${error.message}`);
-    });
-  });
-
-  // Dynamic workspaces namespaces
-  const workspaces = io.of(ALLOWED_NAMESPACES);
-  workspaces.on("connection", (socket) => {
-    const clientIp = socket.handshake.address;
-
-    // Validate userId
-    let userId: string | undefined;
-    try {
-      userId = userIdSchema.parse(socket.handshake.query.userId);
-    } catch (error) {
-      socket.disconnect(true);
-      logger.warn(`Invalid userId from ${clientIp}`);
-      return;
-    }
-
-    logger.info(`Client connected to namespace ${socket.nsp.name} (IP: ${clientIp})`);
-
-    socket.on("joinChatBox", (ticketId: string, callback: (error?: string) => void) => {
-      try {
-        const validatedTicketId = ticketIdSchema.parse(ticketId);
-        socket.join(validatedTicketId);
-        logger.info(`Client joined ticket channel ${validatedTicketId} in namespace ${socket.nsp.name}`);
-        callback();
-      } catch (error) {
-        logger.warn(`Invalid ticketId: ${ticketId}`);
-        callback("Invalid ticket ID");
-      }
+    socket.on("joinChatBox", (ticketId: string) => {
+      socket.join(ticketId);
     });
 
-    socket.on("joinNotification", (callback: (error?: string) => void) => {
+    socket.on("joinNotification", () => {
       socket.join("notification");
-      logger.info(`Client joined notification channel in namespace ${socket.nsp.name}`);
-      callback();
     });
 
-    socket.on("joinTickets", (status: string, callback: (error?: string) => void) => {
-      try {
-        const validatedStatus = statusSchema.parse(status);
-        socket.join(validatedStatus);
-        logger.info(`Client joined ${validatedStatus} channel in namespace ${socket.nsp.name}`);
-        callback();
-      } catch (error) {
-        logger.warn(`Invalid status: ${status}`);
-        callback("Invalid status");
-      }
+    socket.on("joinTickets", (status: string) => {
+      socket.join(status);
     });
 
-    socket.on("joinTicketsLeave", (status: string, callback: (error?: string) => void) => {
-      try {
-        const validatedStatus = statusSchema.parse(status);
-        socket.leave(validatedStatus);
-        logger.info(`Client left ${validatedStatus} channel in namespace ${socket.nsp.name}`);
-        callback();
-      } catch (error) {
-        logger.warn(`Invalid status: ${status}`);
-        callback("Invalid status");
-      }
+    socket.on("joinTicketsLeave", (status: string) => {
+      socket.leave(status);
     });
 
-    socket.on("joinChatBoxLeave", (ticketId: string, callback: (error?: string) => void) => {
-      try {
-        const validatedTicketId = ticketIdSchema.parse(ticketId);
-        socket.leave(validatedTicketId);
-        logger.info(`Client left ticket channel ${validatedTicketId} in namespace ${socket.nsp.name}`);
-        callback();
-      } catch (error) {
-        logger.warn(`Invalid ticketId: ${ticketId}`);
-        callback("Invalid ticket ID");
-      }
+    socket.on("joinChatBoxLeave", (ticketId: string) => {
+      socket.leave(ticketId);
     });
 
     socket.on("disconnect", () => {
-      logger.info(`Client disconnected from namespace ${socket.nsp.name} (IP: ${clientIp})`);
-    });
-
-    socket.on("error", (error) => {
-      logger.error(`Error in namespace ${socket.nsp.name}: ${error.message}`);
+      // desconectado
     });
   });
 
@@ -191,7 +90,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
 export const getIO = (): SocketIO => {
   if (!io) {
-    throw new SocketCompatibleAppError("Socket IO not initialized", 500);
+    throw new AppError("Socket IO not initialized");
   }
   return io;
 };
