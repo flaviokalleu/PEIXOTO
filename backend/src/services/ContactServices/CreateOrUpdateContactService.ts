@@ -88,7 +88,7 @@ const CreateOrUpdateContactService = async ({
 
     let updateImage = (!contact || contact?.profilePicUrl !== profilePicUrl && profilePicUrl !== "") && wbot || false;
 
-    console.log(93, "CreateUpdateContactService", { updateImage })
+    console.log("log 93....")
 
     if (contact) {
       contact.remoteJid = remoteJid;

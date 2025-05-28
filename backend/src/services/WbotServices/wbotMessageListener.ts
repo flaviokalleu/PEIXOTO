@@ -4371,7 +4371,7 @@ const handleMessage = async (
     try {
       if (!msg.key.fromMe) {
         console.log("log... 3226");
-        console.log("log... 3227", { ticketTraking});
+        console.log("log... 3227");
         if (ticketTraking !== null && verifyRating(ticketTraking)) {
           handleRating(parseFloat(bodyMessage), ticket, ticketTraking);
           return;
