@@ -31,6 +31,7 @@ import { getTypeMessage, isValidMsg } from "../services/WbotServices/wbotMessage
 import { addLogs } from "../helpers/addLogs";
 import NodeCache from 'node-cache';
 import { Store } from "./store";
+import { fetchLatestBaileysVersion } from "@whiskeysockets/baileys";
 
 const msgRetryCounterCache = new NodeCache({
   stdTTL: 600,
@@ -153,10 +154,8 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
         if (!whatsappUpdate) return;
 
-        const { id, name, allowGroup, companyId } = whatsappUpdate;
-
-        // const { version, isLatest } = await fetchLatestWaWebVersion({});
-        const versionB = [2, 2410, 1];
+        const { id, name, allowGroup, companyId } = whatsappUpdate;       
+        
         // logger.info(`using WA v${version.join(".")}, isLatest: ${isLatest}`);
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
@@ -167,8 +166,9 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         });
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
 
+        const { version } = await fetchLatestBaileysVersion();
         wsocket = makeWASocket({
-          version: [2, 3000, 1015901307],
+          version,
           logger: loggerBaileys,
           printQRInTerminal: false,
           // auth: state as AuthenticationState,
@@ -198,6 +198,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
           // keepAliveIntervalMs: 60_000,
           getMessage: msgDB.get,
         });
+        console.log(version)
 
 
 
@@ -474,3 +475,4 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
     }
   });
 };
+
