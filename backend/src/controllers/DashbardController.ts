@@ -50,10 +50,9 @@ interface DashboardData {
 // Função simples para calcular NPS baseado na tabela de atendentes
 const calculateSimpleNPS = (attendants: Attendant[]) => {
   console.log("🔢 Calculando NPS com dados dos atendentes:");
-  
-  // Filtrar apenas atendentes que tem avaliações
+
   const attendantsWithRatings = attendants.filter(att => att.countRating > 0 && att.rating > 0);
-  
+
   if (attendantsWithRatings.length === 0) {
     console.log("❌ Nenhum atendente com avaliações encontrado");
     return {
@@ -74,35 +73,29 @@ const calculateSimpleNPS = (attendants: Attendant[]) => {
   let totalDetratores = 0;
   let totalAvaliacoes = 0;
   let totalAtendimentos = 0;
-  let temposEspera = [];
-  let temposAtendimento = [];
+  let temposEspera: number[] = [];
+  let temposAtendimento: number[] = [];
 
-  // Para cada atendente, classificar suas avaliações
   attendantsWithRatings.forEach(attendant => {
     const { name, rating, countRating, tickets, avgWaitTime, avgSupportTime } = attendant;
-    
+
     console.log(`👤 ${name}: Nota ${rating}, ${countRating} avaliações de ${tickets} atendimentos`);
-    
-    // Contar total de tickets e avaliações
+
     totalAvaliacoes += countRating;
     totalAtendimentos += tickets;
-    
-    // Classificar baseado na nota do atendente (escala 0-10)
-    if (rating >= 6) {
-      // Promotores: notas 9-10
+
+    // Classificação com base em notas de 1 a 3
+    if (rating === 3) {
       totalPromotores += countRating;
       console.log(`  ✅ ${countRating} promotores (nota ${rating})`);
-    } else if (rating >= 5) {
-      // Neutros: notas 7-8
+    } else if (rating === 2) {
       totalNeutros += countRating;
       console.log(`  😐 ${countRating} neutros (nota ${rating})`);
     } else {
-      // Detratores: notas 0-6
       totalDetratores += countRating;
       console.log(`  ❌ ${countRating} detratores (nota ${rating})`);
     }
-    
-    // Coletar tempos para média
+
     if (avgWaitTime && avgWaitTime > 0) {
       temposEspera.push(avgWaitTime);
     }
@@ -111,15 +104,12 @@ const calculateSimpleNPS = (attendants: Attendant[]) => {
     }
   });
 
-  // Calcular percentuais
   const promotoresPerc = totalAvaliacoes > 0 ? Math.round((totalPromotores / totalAvaliacoes) * 100) : 0;
   const neutrosPerc = totalAvaliacoes > 0 ? Math.round((totalNeutros / totalAvaliacoes) * 100) : 0;
   const detratoresPerc = totalAvaliacoes > 0 ? Math.round((totalDetratores / totalAvaliacoes) * 100) : 0;
 
-  // NPS = % Promotores - % Detratores
   const npsScore = promotoresPerc - detratoresPerc;
 
-  // Calcular médias de tempo
   const avgWaitTime = temposEspera.length > 0 
     ? Math.round(temposEspera.reduce((a, b) => a + b, 0) / temposEspera.length) 
     : null;
@@ -128,7 +118,6 @@ const calculateSimpleNPS = (attendants: Attendant[]) => {
     ? Math.round(temposAtendimento.reduce((a, b) => a + b, 0) / temposAtendimento.length) 
     : null;
 
-  // Percentual de avaliações
   const percRating = totalAtendimentos > 0 ? Math.round((totalAvaliacoes / totalAtendimentos) * 100) : 0;
 
   console.log("📊 Resultado final:");

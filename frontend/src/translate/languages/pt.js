@@ -345,7 +345,7 @@ const messages = {
           lgpdMessage: "Mensagem de saudaçao LGPD",
           lgpdDeletedMessages: "Ofuscar mensagem apagada pelo contato",
           lgpdSendMessage: "Sempre solicitar confirmação do contato",
-          ratingMessage: "Mensagem de avaliaçao - Escala deve ser de 0 a 10",
+          ratingMessage: "Mensagem de avaliaçao - Escala deve ser de 0 a 3",
           token: "Token para integração externa",
           sendIdQueue: "Fila",
           inactiveMessage: "Mensagem de inatividade",

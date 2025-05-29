@@ -1,222 +1,58 @@
 import React, { useContext, useState, useEffect } from "react";
-
-import Paper from "@material-ui/core/Paper";
-import Typography from "@material-ui/core/Typography";
-// import {  Button, Grid } from "@material-ui/core";
-import { makeStyles } from "@material-ui/core/styles";
-import { useTheme } from "@material-ui/core/styles";
-import { IconButton } from "@mui/material";
-import { Groups, SaveAlt } from "@mui/icons-material";
-
-import CallIcon from "@material-ui/icons/Call";
-import RecordVoiceOverIcon from "@material-ui/icons/RecordVoiceOver";
-import GroupAddIcon from "@material-ui/icons/GroupAdd";
-import HourglassEmptyIcon from "@material-ui/icons/HourglassEmpty";
-import CheckCircleIcon from "@material-ui/icons/CheckCircle";
-import FilterListIcon from "@material-ui/icons/FilterList";
-import ClearIcon from "@material-ui/icons/Clear";
-import SendIcon from '@material-ui/icons/Send';
-import MessageIcon from '@material-ui/icons/Message';
-import AccessAlarmIcon from '@material-ui/icons/AccessAlarm';
-import TimerIcon from '@material-ui/icons/Timer';
+import { 
+  Phone, 
+  Clock, 
+  CheckCircle, 
+  Users, 
+  UserCheck, 
+  UserPlus, 
+  MessageSquare, 
+  Send, 
+  Timer, 
+  Hourglass,
+  TrendingUp,
+  TrendingDown,
+  Filter,
+  X,
+  Download
+} from "lucide-react";
 import * as XLSX from 'xlsx';
-
-import { grey, blue } from "@material-ui/core/colors";
 import { toast } from "react-toastify";
-
-import TabPanel from "../../components/TabPanel"
 import TableAttendantsStatus from "../../components/Dashboard/TableAttendantsStatus";
-import { isArray } from "lodash";
-
+import { isArray, isEmpty } from "lodash";
+import moment from "moment";
 import { AuthContext } from "../../context/Auth/AuthContext";
-
 import useDashboard from "../../hooks/useDashboard";
 import useContacts from "../../hooks/useContacts";
 import useMessages from "../../hooks/useMessages";
 import { ChatsUser } from "./ChartsUser";
 import ChartDonut from "./ChartDonut";
-
 import Filters from "./Filters";
-import { isEmpty } from "lodash";
-import moment from "moment";
-import { ChartsDate } from "./ChartsDate";
-import { Avatar, Button, Card, CardContent, Container, Stack, SvgIcon, Tab, Tabs } from "@mui/material";
 import { i18n } from "../../translate/i18n";
-import Grid2 from "@mui/material/Unstable_Grid2/Grid2";
 import ForbiddenPage from "../../components/ForbiddenPage";
-import { ArrowDownward, ArrowUpward } from "@material-ui/icons";
-
-const useStyles = makeStyles((theme) => ({
-  overline: {
-    fontSize: '0.9rem',
-    fontWeight: 700,
-    color: "grey",
-    letterSpacing: '0.5px',
-    lineHeight: 2.5,
-    textTransform: 'uppercase',
-    fontFamily: "'Plus Jakarta Sans', sans-serif'",
-  },
-  h4: {
-    fontFamily: "'Plus Jakarta Sans', sans-serif'",
-    fontWeight: 500,
-    fontSize: '2rem',
-    lineHeight: 1,
-    color: "grey",
-  },
-  tab: {
-    minWidth: "auto",
-    width: "auto",
-    padding: theme.spacing(0.5, 1),
-    borderRadius: 8,
-    transition: "0.3s",
-    borderWidth: "1px",
-    borderStyle: "solid",
-    marginRight: theme.spacing(0.5),
-    marginLeft: theme.spacing(0.5),
-
-    [theme.breakpoints.down("lg")]: {
-      fontSize: "0.9rem",
-      padding: theme.spacing(0.4, 0.8),
-      marginRight: theme.spacing(0.4),
-      marginLeft: theme.spacing(0.4),
-    },
-    [theme.breakpoints.down("md")]: {
-      fontSize: "0.8rem",
-      padding: theme.spacing(0.3, 0.6),
-      marginRight: theme.spacing(0.3),
-      marginLeft: theme.spacing(0.3),
-    },
-    "&:hover": {
-      backgroundColor: "rgba(6, 81, 131, 0.3)",
-    },
-    "&$selected": {
-      color: "#FFF",
-      backgroundColor: theme.palette.primary.main,
-    },
-  },
-  tabIndicator: {
-    borderWidth: "2px",
-    borderStyle: "solid",
-    height: 6,
-    bottom: 0,
-    color: theme.mode === "light" ? theme.palette.primary.main : "#FFF",
-  },
-  container: {
-    paddingTop: theme.spacing(1),
-    paddingBottom: theme.padding,
-    maxWidth: "1150px",
-    minWidth: "xs",
-  },
-  nps: {
-    paddingTop: theme.spacing(1),
-    paddingBottom: theme.padding,
-  },
-  fixedHeightPaper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    flexDirection: "column",
-    height: 240,
-    overflowY: "auto",
-    ...theme.scrollbarStyles,
-  },
-  cardAvatar: {
-    fontSize: "55px",
-    color: grey[500],
-    backgroundColor: "#ffffff",
-    width: theme.spacing(7),
-    height: theme.spacing(7),
-  },
-  cardTitle: {
-    fontSize: "18px",
-    color: blue[700],
-  },
-  cardSubtitle: {
-    color: grey[600],
-    fontSize: "14px",
-  },
-  alignRight: {
-    textAlign: "right",
-  },
-  fullWidth: {
-    width: "100%",
-  },
-  selectContainer: {
-    width: "100%",
-    textAlign: "left",
-  },
-  iframeDashboard: {
-    width: "100%",
-    height: "calc(100vh - 64px)",
-    border: "none",
-  },
-  container: {
-    paddingTop: theme.spacing(4),
-    paddingBottom: theme.spacing(4),
-  },
-  fixedHeightPaper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    height: 240,
-  },
-  customFixedHeightPaper: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    height: 120,
-  },
-  customFixedHeightPaperLg: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    height: "100%",
-  },
-  fixedHeightPaper2: {
-    padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-  },
-}));
+import { ChartsDate } from "./ChartsDate";
 
 const Dashboard = () => {
-  const theme = useTheme();
-  const classes = useStyles();
   const [counters, setCounters] = useState({});
   const [attendants, setAttendants] = useState([]);
-  const [filterType, setFilterType] = useState(1);
-  const [period, setPeriod] = useState(0);
-  const [dateFrom, setDateFrom] = useState(moment("1", "D").format("YYYY-MM-DD"));
-  const [dateTo, setDateTo] = useState(moment().format("YYYY-MM-DD"));
+  const [showFilter, setShowFilter] = useState(false);
+  const [dateStartTicket, setDateStartTicket] = useState(moment().startOf('month').format("YYYY-MM-DD"));
+  const [dateEndTicket, setDateEndTicket] = useState(moment().format("YYYY-MM-DD"));
+  const [queueTicket, setQueueTicket] = useState(false);
+  const [fetchDataFilter, setFetchDataFilter] = useState(false);
   const [loading, setLoading] = useState(false);
   const { find } = useDashboard();
+  const { user } = useContext(AuthContext);
 
-  //FILTROS NPS
-  const [tab, setTab] = useState("Indicadores");
-  const [selectedUsers, setSelectedUsers] = useState([]);
-  const [selectedQueues, setSelectedQueues] = useState([]);
-
-
+  // State for previous period data to calculate trends
+  const [previousCounters, setPreviousCounters] = useState({});
 
   let newDate = new Date();
   let date = newDate.getDate();
   let month = newDate.getMonth() + 1;
   let year = newDate.getFullYear();
   let nowIni = `${year}-${month < 10 ? `0${month}` : `${month}`}-01`;
-
   let now = `${year}-${month < 10 ? `0${month}` : `${month}`}-${date < 10 ? `0${date}` : `${date}`}`;
-
-  const [showFilter, setShowFilter] = useState(false);
-  const [dateStartTicket, setDateStartTicket] = useState(nowIni);
-  const [dateEndTicket, setDateEndTicket] = useState(now);
-  const [queueTicket, setQueueTicket] = useState(false);
-  const [fetchDataFilter, setFetchDataFilter] = useState(false);
-
-  const { user } = useContext(AuthContext);
-
 
   const exportarGridParaExcel = () => {
     const ws = XLSX.utils.table_to_sheet(document.getElementById('grid-attendants'));
@@ -225,15 +61,12 @@ const Dashboard = () => {
     XLSX.writeFile(wb, 'relatorio-de-atendentes.xlsx');
   };
 
-  var userQueueIds = [];
-
-  if (user.queues && user.queues.length > 0) {
-    userQueueIds = user.queues.map((q) => q.id);
-  }
+  var userQueueIds = user.queues?.map((q) => q.id) || [];
 
   useEffect(() => {
     async function firstLoad() {
       await fetchData();
+      await fetchPreviousData();
     }
     setTimeout(() => {
       firstLoad();
@@ -243,937 +76,342 @@ const Dashboard = () => {
 
   async function fetchData() {
     setLoading(true);
-
     let params = {};
 
-    if (period > 0) {
-      params = {
-        days: period,
-      };
-    }
-
     if (!isEmpty(dateStartTicket) && moment(dateStartTicket).isValid()) {
-      params = {
-        ...params,
-        date_from: moment(dateStartTicket).format("YYYY-MM-DD"),
-      };
+      params = { ...params, date_from: moment(dateStartTicket).format("YYYY-MM-DD") };
     }
-
     if (!isEmpty(dateEndTicket) && moment(dateEndTicket).isValid()) {
-      params = {
-        ...params,
-        date_to: moment(dateEndTicket).format("YYYY-MM-DD"),
-      };
+      params = { ...params, date_to: moment(dateEndTicket).format("YYYY-MM-DD") };
     }
-
     if (Object.keys(params).length === 0) {
       toast.error("Parametrize o filtro");
       setLoading(false);
       return;
     }
 
-    const data = await find(params);
-
-
-    setCounters(data.counters);
-    if (isArray(data.attendants)) {
-      setAttendants(data.attendants);
-    } else {
-      setAttendants([]);
+    try {
+      const data = await find(params);
+      setCounters(data.counters || {});
+      setAttendants(isArray(data.attendants) ? data.attendants : []);
+    } catch (error) {
+      toast.error("Erro ao carregar dados do dashboard");
+      console.error(error);
     }
-
     setLoading(false);
   }
 
-  const handleSelectedUsers = (selecteds) => {
-    const users = selecteds.map((t) => t.id);
-    setSelectedUsers(users);
-  };
+  async function fetchPreviousData() {
+    // Fetch data for the previous period to calculate trends
+    let previousParams = {
+      date_from: moment(dateStartTicket).subtract(1, 'month').format("YYYY-MM-DD"),
+      date_to: moment(dateEndTicket).subtract(1, 'month').format("YYYY-MM-DD"),
+    };
 
-
-  const handleChangeTab = (e, newValue) => {
-    setTab(newValue);
-  };
-
-  function formatTime(minutes) {
-    return moment()
-      .startOf("day")
-      .add(minutes, "minutes")
-      .format("HH[h] mm[m]");
+    try {
+      const data = await find(previousParams);
+      setPreviousCounters(data.counters || {});
+    } catch (error) {
+      console.error("Erro ao carregar dados do período anterior", error);
+    }
   }
 
+  const calculateTrend = (currentValue, previousValue) => {
+    if (!previousValue || previousValue === 0) return { trend: null, trendValue: 0 };
+    const percentage = ((currentValue - previousValue) / previousValue * 100).toFixed(1);
+    return {
+      trend: percentage >= 0 ? 'up' : 'down',
+      trendValue: Math.abs(percentage),
+    };
+  };
+
   const GetUsers = () => {
-    let count;
-    let userOnline = 0;
-    attendants.forEach(user => {
-      if (user.online === true) {
-        userOnline = userOnline + 1
-      }
-    })
-    count = userOnline === 0 ? 0 : userOnline;
-    return count;
+    const userOnline = attendants.filter(user => user.online === true).length;
+    return userOnline;
   };
 
   const GetContacts = (all) => {
-    let props = {};
-    if (all) {
-      props = {};
-    } else {
-      props = {
-        dateStart: dateStartTicket,
-        dateEnd: dateEndTicket,
-      };
-    }
+    const props = all ? {} : { dateStart: dateStartTicket, dateEnd: dateEndTicket };
     const { count } = useContacts(props);
-    return count;
+    return count || 0;
   };
 
   const GetMessages = (all, fromMe) => {
-    let props = {};
-    if (all) {
-      if (fromMe) {
-        props = {
-          fromMe: true
-        };
-      } else {
-        props = {
-          fromMe: false
-        };
-      }
-    } else {
-      if (fromMe) {
-        props = {
-          fromMe: true,
-          dateStart: dateStartTicket,
-          dateEnd: dateEndTicket,
-        };
-      } else {
-        props = {
-          fromMe: false,
-          dateStart: dateStartTicket,
-          dateEnd: dateEndTicket,
-        };
-      }
-    }
+    const props = all
+      ? { fromMe }
+      : { fromMe, dateStart: dateStartTicket, dateEnd: dateEndTicket };
     const { count } = useMessages(props);
-    return count;
+    return count || 0;
   };
+
+  function formatTime(minutes) {
+    return minutes
+      ? moment().startOf("day").add(minutes, "minutes").format("HH[h] mm[m]")
+      : "N/A";
+  }
 
   function toggleShowFilter() {
     setShowFilter(!showFilter);
   }
 
+  const MetricCard = ({ title, value, icon: Icon, bgColor, metricKey }) => {
+    const { trend, trendValue } = metricKey
+      ? calculateTrend(counters[metricKey] || 0, previousCounters[metricKey] || 0)
+      : { trend: null, trendValue: 0 };
+
+    return (
+      <div className="rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-all duration-200 hover:border-gray-300">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-medium text-gray-600 uppercase tracking-wide mb-2">
+              {title}
+            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-2xl font-bold text-gray-900">
+                {value}
+              </p>
+              
+            </div>
+          </div>
+          <div className={`w-12 h-12 rounded-lg ${bgColor} flex items-center justify-center`}>
+            <Icon className="w-6 h-6 text-white" />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
-      {
-        user.profile === "user" && user.showDashboard === "disabled" ?
-          <ForbiddenPage />
-          :
-          <>
+      {user.profile === "user" && user.showDashboard === "disabled" ? (
+        <ForbiddenPage />
+      ) : (
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Header */}
+          <div className="flex justify-between items-center mb-8">
             <div>
-              <Container maxWidth="lg" className={classes.container}>
-                <Grid2 container spacing={3} className={classes.container}>
+              <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+              <p className="text-gray-600 mt-1">Acompanhe suas métricas em tempo real</p>
+            </div>
+            
+          </div>
 
-                  {/* FILTROS */}
-                  <Grid2 xs={12}>
-                    <Button
-                      onClick={toggleShowFilter}
-                      style={{ float: "right" }}
-                      color="primary"
-                    >
-                      {!showFilter ? (
-                        <FilterListIcon />
-                      ) : (
-                        <ClearIcon />
-                      )}
-                    </Button>
-                  </Grid2>
+          {/* Filters */}
+          {showFilter && (
+            <div className="mb-8 rounded-xl shadow-sm border border-gray-200 p-6">
+              <Filters
+                setDateStartTicket={setDateStartTicket}
+                setDateEndTicket={setDateEndTicket}
+                dateStartTicket={dateStartTicket}
+                dateEndTicket={dateEndTicket}
+                setQueueTicket={setQueueTicket}
+                queueTicket={queueTicket}
+                fetchData={setFetchDataFilter}
+              />
+            </div>
+          )}
 
-                  {showFilter && (
-                    <Filters
-                      classes={classes}
-                      setDateStartTicket={setDateStartTicket}
-                      setDateEndTicket={setDateEndTicket}
-                      dateStartTicket={dateStartTicket}
-                      dateEndTicket={dateEndTicket}
-                      setQueueTicket={setQueueTicket}
-                      queueTicket={queueTicket}
-                      fetchData={setFetchDataFilter}
-                    />
-                  )}
+          {/* Indicadores Section */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Indicadores</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <MetricCard
+                title={i18n.t("dashboard.cards.inAttendance")}
+                value={counters.supportHappening || 0}
+                icon={Phone}
+                bgColor="bg-blue-500"
+                metricKey="supportHappening"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.waiting")}
+                value={counters.supportPending || 0}
+                icon={Hourglass}
+                bgColor="bg-yellow-500"
+                metricKey="supportPending"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.finalized")}
+                value={counters.supportFinished || 0}
+                icon={CheckCircle}
+                bgColor="bg-green-500"
+                metricKey="supportFinished"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.groups")}
+                value={counters.supportGroups || 0}
+                icon={Users}
+                bgColor="bg-purple-500"
+                metricKey="supportGroups"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.activeAttendants")}
+                value={`${GetUsers()}/${attendants.length}`}
+                icon={UserCheck}
+                bgColor="bg-indigo-500"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.newContacts")}
+                value={counters.leads || 0}
+                icon={UserPlus}
+                bgColor="bg-orange-500"
+                metricKey="leads"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.totalReceivedMessages")}
+                value={`${GetMessages(false, false)}/${GetMessages(true, false)}`}
+                icon={MessageSquare}
+                bgColor="bg-gray-500"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.totalSentMessages")}
+                value={`${GetMessages(false, true)}/${GetMessages(true, true)}`}
+                icon={Send}
+                bgColor="bg-green-600"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.averageServiceTime")}
+                value={formatTime(counters.avgSupportTime)}
+                icon={Clock}
+                bgColor="bg-amber-500"
+                metricKey="avgSupportTime"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.averageWaitingTime")}
+                value={formatTime(counters.avgWaitTime)}
+                icon={Timer}
+                bgColor="bg-red-500"
+                metricKey="avgWaitTime"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.activeTickets")}
+                value={counters.activeTickets}
+                icon={TrendingUp}
+                bgColor="bg-red-600"
+                metricKey="activeTickets"
+              />
+              <MetricCard
+                title={i18n.t("dashboard.cards.passiveTickets")}
+                value={counters.passiveTickets}
+                icon={TrendingDown}
+                bgColor="bg-green-600"
+                metricKey="passiveTickets"
+              />
+            </div>
+          </div>
 
-                  <Grid2 container width="100%" justifyContent="center">
-                    <Tabs
-                      value={tab}
-                      onChange={handleChangeTab}
-                      variant="fullWidth"
-                      indicatorColor="primary"
-                      textColor="primary"
-                      aria-label="icon label tabs example"
-                      classes={{ indicator: classes.tabIndicator }}
-                      sx={{
-                        borderRadius: "5px",
-                        borderColor: "#aaa",
-                        borderWidth: "1px",
-                        borderStyle: "solid",
-                        fontFamily: '"Plus Jakarta Sans", sans-serif',
-                      }}
-                    >
-                      <Tab classes={{ root: classes.tab }}
-                        style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#FFF" }}
-                        value="Indicadores"
-                        label={i18n.t("dashboard.tabs.indicators")}
-                      />
-                      <Tab classes={{ root: classes.tab }}
-                        style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#FFF" }}
-                        value="NPS"
-                        label={i18n.t("dashboard.tabs.assessments")}
-                      />
-                      <Tab classes={{ root: classes.tab }}
-                        style={{ color: theme.mode === "light" ? theme.palette.primary.main : "#FFF" }}
-                        value="Atendentes"
-                        label={i18n.t("dashboard.tabs.attendants")}
-                      />
-                    </Tabs>
-                  </Grid2>
-                  <TabPanel
-                    className={classes.container}
-                    value={tab}
-                    name={"Indicadores"}
-                  >
-                    <Container maxWidth="xl" >
-                      <Grid2
-                        container
-                        spacing={3}
-                      >
-                        {/* EM ATENDIMENTO */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.inAttendance")}
-                                  </Typography>
-                                  <Typography variant="h4" className={classes.h4}>
-                                    {counters.supportHappening}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#0b708c',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <CallIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
+          {/* NPS Section */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">NPS</h2>
+            <div className="space-y-6">
+              {/* NPS Cards Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="rounded-xl shadow-sm border border-gray-200 p-6">
+                  <ChartDonut
+                    data={[
+                      `{'name': 'Promotores', 'value': ${counters.npsPromotersPerc || 0}}`,
+                      `{'name': 'Detratores', 'value': ${counters.npsDetractorsPerc || 0}}`,
+                      `{'name': 'Neutros', 'value': ${counters.npsPassivePerc || 0}}`
+                    ]}
+                    value={counters.npsScore || 0}
+                    title="Score"
+                    color={(parseInt(counters.npsPromotersPerc || 0) + parseInt(counters.npsDetractorsPerc || 0) + parseInt(counters.npsPassivePerc || 0)) === 0 ? ["#918F94"] : ["#2EA85A", "#F73A2C", "#F7EC2C"]}
+                  />
+                </div>
+                <div className="rounded-xl shadow-sm border border-gray-200 p-6">
+                  <ChartDonut
+                    title={i18n.t("dashboard.assessments.prosecutors")}
+                    value={counters.npsPromotersPerc || 0}
+                    data={[`{'name': 'Promotores', 'value': 100}`]}
+                    color={["#2EA85A"]}
+                  />
+                </div>
+                <div className="rounded-xl shadow-sm border border-gray-200 p-6">
+                  <ChartDonut
+                    data={[`{'name': 'Neutros', 'value': 100}`]}
+                    title={i18n.t("dashboard.assessments.neutral")}
+                    value={counters.npsPassivePerc || 0}
+                    color={["#F7EC2C"]}
+                  />
+                </div>
+                <div className="rounded-xl shadow-sm border border-gray-200 p-6">
+                  <ChartDonut
+                    data={[`{'name': 'Detratores', 'value': 100}`]}
+                    title={i18n.t("dashboard.assessments.detractors")}
+                    value={counters.npsDetractorsPerc || 0}
+                    color={["#F73A2C"]}
+                  />
+                </div>
+              </div>
 
-                        {/* AGUARDANDO */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.waiting")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {counters.supportPending}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#47606e',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <HourglassEmptyIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
+              {/* NPS Summary */}
+              <div className="rounded-xl shadow-sm border border-gray-200 p-6">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Resumo das Avaliações</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{counters.waitRating || 0}</p>
+                    <p className="text-sm text-gray-600">{i18n.t("dashboard.assessments.callsWaitRating")}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{counters.withoutRating || 0}</p>
+                    <p className="text-sm text-gray-600">{i18n.t("dashboard.assessments.callsWithoutRating")}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">{counters.withRating || 0}</p>
+                    <p className="text-sm text-gray-600">{i18n.t("dashboard.assessments.ratedCalls")}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-900">
+                      {Number(counters.percRating / 100 || 0).toLocaleString(undefined, { style: 'percent' })}
+                    </p>
+                    <p className="text-sm text-gray-600">{i18n.t("dashboard.assessments.evaluationIndex")}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
 
-                        {/* FINALIZADOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.finalized")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {counters.supportFinished}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#5852ab',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <CheckCircleIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
+          {/* Attendants Section */}
+          <div>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Atendentes</h2>
+            <div className="space-y-6">
+              {/* Export Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={exportarGridParaExcel}
+                  className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+                >
+                  <Download className="w-4 h-4 mr-2" />
+                  Exportar para Excel
+                </button>
+              </div>
 
-                        {/* GRUPOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.groups")}
-                                  </Typography>
-                                  <Typography variant="h4"
+              {/* Attendants Table */}
+              <div className="rounded-xl shadow-sm border border-gray-200" id="grid-attendants">
+                {attendants.length ? (
+                  <TableAttendantsStatus
+                    attendants={attendants}
+                    loading={loading}
+                  />
+                ) : (
+                  <div className="p-8 text-center text-gray-500">
+                    Nenhum atendente encontrado
+                  </div>
+                )}
+              </div>
 
-                                    className={classes.h4}
-                                  >
-                                    {counters.supportGroups}
-                                  </Typography>
-                                </Stack>
-
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#01BBAC',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <Groups />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* ATENDENTES ATIVOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.activeAttendants")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {GetUsers()}/{attendants.length}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#805753',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <RecordVoiceOverIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* NOVOS CONTATOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.newContacts")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {counters.leads}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#8c6b19',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <GroupAddIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* MINHAS MENSAGEM RECEBIDAS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.totalReceivedMessages")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {GetMessages(false, false)}/{GetMessages(true, false)}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#333133',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <MessageIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* MINHAS MENSAGEM ENVIADAS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.totalSentMessages")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {GetMessages(false, true)}/{GetMessages(true, true)}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#558a59',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <SendIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* T.M. DE ATENDIMENTO */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.averageServiceTime")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {formatTime(counters.avgSupportTime)}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#F79009',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <AccessAlarmIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* T.M. DE ESPERA */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.averageWaitingTime")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {formatTime(counters.avgWaitTime)}
-                                  </Typography>
-                                </Stack>
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#8a2c40',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <TimerIcon />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* TICKETS ATIVOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.activeTickets")}
-                                  </Typography>
-                                  <Typography variant="h4"
-                                    className={classes.h4}
-                                  >
-                                    {counters.activeTickets}
-                                  </Typography>
-                                </Stack>
-
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#EE4512',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <ArrowUpward />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-
-                        {/* TICKETS PASSIVOS */}
-                        <Grid2 xs={12}
-                          sm={6}
-                          lg={4}
-                        >
-                          <Card sx={{
-                            height: "100%",
-                            backgroundColor:
-                              theme.mode === "light"
-                                ? "transparent"
-                                : "rgba(170, 170, 170, 0.2)",
-                          }}>
-                            <CardContent>
-                              <Stack
-                                alignItems="flex-start"
-                                direction="row"
-                                justifyContent="space-between"
-                                spacing={3}
-                              >
-                                <Stack spacing={1}>
-                                  <Typography
-                                    color="primary"
-                                    variant="overline"
-                                    className={classes.overline}
-                                  >
-                                    {i18n.t("dashboard.cards.passiveTickets")}
-                                  </Typography>
-                                  <Typography variant="h4"
-
-                                    className={classes.h4}
-                                  >
-                                    {counters.passiveTickets}
-                                  </Typography>
-                                </Stack>
-
-
-                                <Avatar
-                                  sx={{
-                                    backgroundColor: '#28C037',
-                                    height: 60,
-                                    width: 60
-                                  }}
-                                >
-                                  <SvgIcon>
-                                    <ArrowDownward />
-                                  </SvgIcon>
-                                </Avatar>
-                              </Stack>
-                            </CardContent>
-                          </Card>
-                        </Grid2>
-                      </Grid2>
-                    </Container>
-                  </TabPanel>
-
-                  <TabPanel
-                    className={classes.container}
-                    value={tab}
-                    name={"NPS"}
-                  >
-                    <Grid2 className={classes.container}>
-                      <Grid2 container width="100%" spacing={2}>
-
-                        <Grid2 xs={12} sm={6} md={3}>
-                          <Paper elevation={3} >
-                            <ChartDonut
-                              data={[`{'name': 'Promotores', 'value': ${counters.npsPromotersPerc | 100}}`,
-                              `{'name': 'Detratores', 'value': ${counters.npsDetractorsPerc | 0}}`,
-                              `{'name': 'Neutros', 'value': ${counters.npsPassivePerc | 0}}`
-                              ]}
-                              value={counters.npsScore | 0}
-                              title="Score"
-                              color={(parseInt(counters.npsPromotersPerc | 0) + parseInt(counters.npsDetractorsPerc | 0) + parseInt(counters.npsPassivePerc | 0)) === 0 ? ["#918F94"] : ["#2EA85A", "#F73A2C", "#F7EC2C"]}
-                            />
-                          </Paper>
-                        </Grid2>
-
-                        <Grid2 xs={12} sm={6} md={3}>
-                          <Paper elevation={3}>
-                            <ChartDonut
-                              title={i18n.t("dashboard.assessments.prosecutors")}
-                              value={counters.npsPromotersPerc | 0}
-                              data={[`{'name': 'Promotores', 'value': 100}`]}
-                              color={["#2EA85A"]}
-                            />
-                          </Paper>
-                        </Grid2>
-
-                        <Grid2 xs={12} sm={6} md={3}>
-                          <Paper elevation={3} >
-                            <ChartDonut
-                              data={[`{'name': 'Neutros', 'value': 100}`]}
-                              title={i18n.t("dashboard.assessments.neutral")}
-                              value={counters.npsPassivePerc | 0}
-                              color={["#F7EC2C"]}
-                            />
-                          </Paper>
-                        </Grid2>
-
-                        <Grid2 xs={12} sm={6} md={3}>
-                          <Paper elevation={3}>
-                            <ChartDonut
-                              data={[`{'name': 'Detratores', 'value': 100}`]}
-                              title={i18n.t("dashboard.assessments.detractors")}
-                              value={counters.npsDetractorsPerc | 0}
-                              color={["#F73A2C"]}
-                            />
-                          </Paper>
-                        </Grid2>
-
-                        <Grid2 xs={12} sm={6} md={12}>
-                          <Paper elevation={3}>
-                            <Typography
-                              component="h3"
-                              variant="h6"
-                              paragraph
-                              style={{ marginLeft: "10px" }}
-                            >
-                              {i18n.t("dashboard.assessments.callsWaitRating")}: {counters.waitRating} <br></br>
-                              {i18n.t("dashboard.assessments.callsWithoutRating")}: {counters.withoutRating} <br></br>
-                              {i18n.t("dashboard.assessments.ratedCalls")}: {counters.withRating} <br></br>
-                              {i18n.t("dashboard.assessments.evaluationIndex")}: {Number(counters.percRating / 100).toLocaleString(undefined, { style: 'percent' })} <br></br>
-                            </Typography>
-                          </Paper>
-                        </Grid2>
-
-                      </Grid2>
-                    </Grid2>
-
-                  </TabPanel>
-
-                  <TabPanel
-                    className={classes.container}
-                    value={tab}
-                    name={"Atendentes"}
-                  >
-                    <Container width="100%" className={classes.container}>
-
-                      <IconButton onClick={exportarGridParaExcel} aria-label="Exportar para Excel">
-                        <SaveAlt />
-                      </IconButton>
-
-                      <Grid2 container width="100%">
-                        {/* CARD DE GRAFICO */}
-                        {/* <Grid2 item xs={12}>
-                  <Paper
-                    elevation={6}
-                    className={classes.fixedHeightPaper}
-                  >
-                    <Chart
-                      dateStartTicket={dateStartTicket}
-                      dateEndTicket={dateEndTicket}
-                      queueTicket={queueTicket}
-                    />
-                  </Paper>
-                </Grid2>  */}
-
-                        {/* INFO DOS USUARIOS */}
-                        <Grid2 xs={12} id="grid-attendants">
-                          {attendants.length ? (
-                            <TableAttendantsStatus
-                              attendants={attendants}
-                              loading={loading}
-                            />
-                          ) : null}
-                        </Grid2>
-
-                        {/* TOTAL DE ATENDIMENTOS POR USUARIO */}
-                        <Grid2 xs={12} id="grid-attendants">
-                          <Paper className={classes.fixedHeightPaper2}>
-                            <ChatsUser />
-                          </Paper>
-                        </Grid2>
-
-                        {/* TOTAL DE ATENDIMENTOS */}
-                        <Grid2 xs={12} id="grid-attendants">
-                          <Paper className={classes.fixedHeightPaper2}>
-                            <ChartsDate />
-                          </Paper>
-                        </Grid2>
-                      </Grid2>
-                    </Container>
-                  </TabPanel>
-                </Grid2>
-              </Container >
-            </div >
-          </>
-      }
+              {/* Charts */}
+              <div className="">
+                <div className="rounded-xl shadow-sm border border-gray-200">
+                  <ChatsUser />
+                </div>
+                <div className="rounded-xl shadow-sm border border-gray-200">
+                  <ChartsDate />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

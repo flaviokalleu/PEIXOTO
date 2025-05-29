@@ -1,136 +1,139 @@
 import React, { useEffect, useState, useContext } from 'react';
 import {
-    Chart as ChartJS,
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend,
+  Chart as ChartJS,
+  RadialLinearScale,
+  ArcElement,
+  Tooltip,
+  Legend
 } from 'chart.js';
-import { Bar } from 'react-chartjs-2';
+import { PolarArea } from 'react-chartjs-2';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import brLocale from 'date-fns/locale/pt-BR';
 import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { Button, Grid, TextField } from '@material-ui/core';
-import Typography from "@material-ui/core/Typography";
-import api from '../../services/api';
+import {
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Grid,
+  TextField,
+  Typography,
+  useTheme
+} from '@mui/material';
+import brLocale from 'date-fns/locale/pt-BR';
 import { format } from 'date-fns';
 import { toast } from 'react-toastify';
-import './button.css';
+import api from '../../services/api';
 import { i18n } from '../../translate/i18n';
-import { AuthContext } from "../../context/Auth/AuthContext";
-import {  useTheme } from '@material-ui/core';
+import { AuthContext } from '../../context/Auth/AuthContext';
 
-ChartJS.register(
-    CategoryScale,
-    LinearScale,
-    BarElement,
-    Title,
-    Tooltip,
-    Legend
-);
-
-export const options = {
-    responsive: true,
-    plugins: {
-        legend: {
-            position: 'top',
-            display: false,
-        },
-        title: {
-            display: true,
-            text: 'Tickets',
-            position: 'left',
-        },
-        datalabels: {
-            display: true,
-            anchor: 'start',
-            offset: -30,
-            align: "start",
-            color: "#fff",
-            textStrokeColor: "#000",
-            textStrokeWidth: 2,
-            font: {
-                size: 20,
-                weight: "bold"
-
-            },
-        }
-    },
-};
+ChartJS.register(RadialLinearScale, ArcElement, Tooltip, Legend);
 
 export const ChartsDate = () => {
-    const theme = useTheme();
-    const [initialDate, setInitialDate] = useState(new Date());
-    const [finalDate, setFinalDate] = useState(new Date());
-    const [ticketsData, setTicketsData] = useState({ data: [], count: 0 });
-    const { user } = useContext(AuthContext);
+  const theme = useTheme();
+  const [initialDate, setInitialDate] = useState(new Date());
+  const [finalDate, setFinalDate] = useState(new Date());
+  const [ticketsData, setTicketsData] = useState({ data: [], count: 0 });
+  const { user } = useContext(AuthContext);
+  const companyId = user.companyId;
 
-    const companyId = user.companyId;
+  useEffect(() => {
+    if (companyId) handleGetTicketsInformation();
+  }, [companyId]);
 
-    useEffect(() => {
-        if (companyId) {
-            handleGetTicketsInformation();
-        }
-    }, [companyId]);
-
-    const dataCharts = {
-
-        labels: ticketsData && ticketsData?.data.length > 0 && ticketsData?.data.map((item) => (item.hasOwnProperty('horario') ? `Das ${item.horario}:00 as ${item.horario}:59` : item.data)),
-        datasets: [
-            {
-                // label: 'Dataset 1',
-                data: ticketsData?.data.length > 0 && ticketsData?.data.map((item, index) => {
-                    return item.total
-                }),
-                backgroundColor: theme.palette.primary.main,
-            },
-        ],
-    };
-
-    const handleGetTicketsInformation = async () => {
-        try {
-            const { data } = await api.get(`/dashboard/ticketsDay?initialDate=${format(initialDate, 'yyyy-MM-dd')}&finalDate=${format(finalDate, 'yyyy-MM-dd')}&companyId=${companyId}`);
-            setTicketsData(data);
-        } catch (error) {
-            toast.error('Erro ao buscar informações dos tickets');
-        }
+  const handleGetTicketsInformation = async () => {
+    try {
+      const { data } = await api.get(
+        `/dashboard/ticketsDay?initialDate=${format(
+          initialDate,
+          'yyyy-MM-dd'
+        )}&finalDate=${format(finalDate, 'yyyy-MM-dd')}&companyId=${companyId}`
+      );
+      setTicketsData(data);
+    } catch (error) {
+      toast.error('Erro ao buscar informações dos tickets');
     }
+  };
 
-    return (
-        <>
-            <Typography component="h2" variant="h6" color="primary" gutterBottom>
-                {i18n.t("dashboard.users.totalAttendances")} ({ticketsData?.count})
-            </Typography>
+  const chartData = {
+    labels: ticketsData?.data.map((item) =>
+      item.horario ? `Das ${item.horario}:00 às ${item.horario}:59` : item.data
+    ),
+    datasets: [
+      {
+        label: 'Tickets',
+        data: ticketsData?.data.map((item) => item.total),
+        backgroundColor: ticketsData?.data.map(
+          (_, i) =>
+            `hsl(${(i * 360) / (ticketsData.data.length || 1)}, 70%, 60%)`
+        ),
+        borderWidth: 1
+      }
+    ]
+  };
 
-            <Grid container spacing={2}>
-                <Grid item>
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
-                        <DatePicker
-                            value={initialDate}
-                            onChange={(newValue) => { setInitialDate(newValue) }}
-                            label={i18n.t("dashboard.date.initialDate")}
-                            renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
+  const chartOptions = {
+    responsive: true,
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          color: theme.palette.text.primary
+        }
+      },
+      tooltip: {
+        enabled: true
+      }
+    }
+  };
 
-                        />
-                    </LocalizationProvider>
-                </Grid>
-                <Grid item>
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
-                        <DatePicker
-                            value={finalDate}
-                            onChange={(newValue) => { setFinalDate(newValue) }}
-                            label={i18n.t("dashboard.date.finalDate")}
-                            renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
-                        />
-                    </LocalizationProvider>
-                </Grid>
-                <Grid item>
-                    <Button style={{ backgroundColor: theme.palette.primary.main, top: '10px' }} onClick={handleGetTicketsInformation} variant='contained'>Filtrar</Button>
-                </Grid>
+  return (
+    <Card elevation={3} sx={{ borderRadius: 4, p: 2 }}>
+      <CardContent>
+        <Typography variant="h6" gutterBottom color="primary">
+          {i18n.t('dashboard.users.totalAttendances')} ({ticketsData?.count})
+        </Typography>
+
+        <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={brLocale}>
+          <Grid container spacing={2} alignItems="center" mb={3}>
+            <Grid item xs={12} sm={4}>
+              <DatePicker
+                label={i18n.t('dashboard.date.initialDate')}
+                value={initialDate}
+                onChange={(newValue) => setInitialDate(newValue)}
+                renderInput={(params) => <TextField {...params} fullWidth size="small" />}
+              />
             </Grid>
-            <Bar options={options} data={dataCharts} style={{ maxWidth: '100%', maxHeight: '280px', }} />
-        </>
-    );
-}
+            <Grid item xs={12} sm={4}>
+              <DatePicker
+                label={i18n.t('dashboard.date.finalDate')}
+                value={finalDate}
+                onChange={(newValue) => setFinalDate(newValue)}
+                renderInput={(params) => <TextField {...params} fullWidth size="small" />}
+              />
+            </Grid>
+            <Grid item xs={12} sm={4}>
+              <Button
+                onClick={handleGetTicketsInformation}
+                variant="contained"
+                color="primary"
+                sx={{
+                  height: '40px',
+                  borderRadius: 2,
+                  px: 4,
+                  mt: { xs: 1, sm: 0 },
+                }}
+                fullWidth
+              >
+                Filtrar
+              </Button>
+            </Grid>
+          </Grid>
+        </LocalizationProvider>
+
+        <Box sx={{ maxWidth: 600, mx: 'auto' }}>
+          <PolarArea data={chartData} options={chartOptions} />
+        </Box>
+      </CardContent>
+    </Card>
+  );
+};
