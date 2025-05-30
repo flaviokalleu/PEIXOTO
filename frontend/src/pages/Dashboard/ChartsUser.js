@@ -8,7 +8,9 @@ import {
   PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  BarController,
+  LineController, // ✅ Adicionados
 } from 'chart.js';
 import { Chart } from 'react-chartjs-2';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
@@ -22,6 +24,7 @@ import { toast } from 'react-toastify';
 import { i18n } from '../../translate/i18n';
 import { AuthContext } from '../../context/Auth/AuthContext';
 
+// ✅ Corrigido: registrando também os controladores
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -30,13 +33,15 @@ ChartJS.register(
   PointElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  BarController,
+  LineController
 );
 
 const useStyles = makeStyles((theme) => ({
   container: {
     padding: theme.spacing(2),
-  }
+  },
 }));
 
 const options = {
@@ -47,37 +52,37 @@ const options = {
       position: 'top',
       labels: {
         font: {
-          size: 13
-        }
-      }
+          size: 13,
+        },
+      },
     },
     title: {
       display: true,
       text: 'Distribuição de Atendimentos por Usuário',
       font: {
-        size: 18
-      }
-    }
+        size: 18,
+      },
+    },
   },
   scales: {
     x: {
       ticks: {
         color: '#555',
         font: {
-          size: 12
-        }
-      }
+          size: 12,
+        },
+      },
     },
     y: {
       beginAtZero: true,
       ticks: {
         color: '#555',
         font: {
-          size: 12
-        }
-      }
-    }
-  }
+          size: 12,
+        },
+      },
+    },
+  },
 };
 
 export const ChatsUser = () => {
@@ -105,7 +110,7 @@ export const ChatsUser = () => {
         data: ticketsData?.data.map((item) => item.quantidade),
         backgroundColor: theme.palette.primary.main,
         borderRadius: 6,
-        barThickness: 30
+        barThickness: 30,
       },
       {
         type: 'line',
@@ -115,14 +120,16 @@ export const ChatsUser = () => {
         backgroundColor: theme.palette.secondary.main,
         fill: false,
         tension: 0.4,
-        pointRadius: 5
-      }
-    ]
+        pointRadius: 5,
+      },
+    ],
   };
 
   const handleGetTicketsInformation = async () => {
     try {
-      const { data } = await api.get(`/dashboard/ticketsUsers?initialDate=${format(initialDate, 'yyyy-MM-dd')}&finalDate=${format(finalDate, 'yyyy-MM-dd')}&companyId=${companyId}`);
+      const { data } = await api.get(
+        `/dashboard/ticketsUsers?initialDate=${format(initialDate, 'yyyy-MM-dd')}&finalDate=${format(finalDate, 'yyyy-MM-dd')}&companyId=${companyId}`
+      );
       setTicketsData(data);
     } catch (error) {
       toast.error('Erro ao buscar informações dos tickets');
@@ -132,7 +139,7 @@ export const ChatsUser = () => {
   return (
     <>
       <Typography component="h2" variant="h6" color="primary" gutterBottom>
-        {i18n.t("dashboard.users.totalCallsUser")}
+        {i18n.t('dashboard.users.totalCallsUser')}
       </Typography>
 
       <Grid container spacing={2}>
@@ -141,7 +148,7 @@ export const ChatsUser = () => {
             <DatePicker
               value={initialDate}
               onChange={(newValue) => setInitialDate(newValue)}
-              label={i18n.t("dashboard.date.initialDate")}
+              label={i18n.t('dashboard.date.initialDate')}
               renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
             />
           </LocalizationProvider>
@@ -151,7 +158,7 @@ export const ChatsUser = () => {
             <DatePicker
               value={finalDate}
               onChange={(newValue) => setFinalDate(newValue)}
-              label={i18n.t("dashboard.date.finalDate")}
+              label={i18n.t('dashboard.date.finalDate')}
               renderInput={(params) => <TextField fullWidth {...params} sx={{ width: '20ch' }} />}
             />
           </LocalizationProvider>
@@ -160,7 +167,7 @@ export const ChatsUser = () => {
           <Button
             style={{ backgroundColor: theme.palette.primary.main, top: '10px' }}
             onClick={handleGetTicketsInformation}
-            variant='contained'
+            variant="contained"
           >
             Filtrar
           </Button>
@@ -168,7 +175,7 @@ export const ChatsUser = () => {
       </Grid>
 
       <div style={{ width: '100%', height: '400px', marginTop: '20px' }}>
-        <Chart type='bar' options={options} data={data} />
+        <Chart options={options} data={data} /> {/* ✅ sem "type='bar'" aqui */}
       </div>
     </>
   );
