@@ -19,37 +19,42 @@ import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import { AuthContext } from "../../context/Auth/AuthContext";
 
+
 import validationSchema from "./FormModel/validationSchema";
 import checkoutFormModel from "./FormModel/checkoutFormModel";
 import formInitialValues from "./FormModel/formInitialValues";
 
 import useStyles from "./styles";
 
+
 export default function CheckoutPage(props) {
   const steps = ["Dados", "Personalizar", "Revisar"];
   const { formId, formField } = checkoutFormModel;
-
+  
+  
+  
   const classes = useStyles();
   const [activeStep, setActiveStep] = useState(1);
   const [datePayment, setDatePayment] = useState(null);
-  const [invoiceId, setinvoiceId] = useState(props.Invoice.id);
+  const [invoiceId, ] = useState(props.Invoice.id);
+  const [paymentText, setPaymentText] = useState("");
   const currentValidationSchema = validationSchema[activeStep];
   const isLastStep = activeStep === steps.length - 1;
-  const { user, socket } = useContext(AuthContext);
+  const { user } = useContext(AuthContext);
 
-  function _renderStepContent(step, setFieldValue, setActiveStep, values) {
+  function _renderStepContent(step, setFieldValue, setActiveStep, values ) {
 
     switch (step) {
       case 0:
-        return <AddressForm formField={formField} values={values} setFieldValue={setFieldValue} />;
+        return <AddressForm formField={formField} values={values} setFieldValue={setFieldValue}  />;
       case 1:
-        return <PaymentForm
-          formField={formField}
-          setFieldValue={setFieldValue}
-          setActiveStep={setActiveStep}
-          activeStep={step}
-          invoiceId={invoiceId}
-          values={values}
+        return <PaymentForm 
+        formField={formField} 
+        setFieldValue={setFieldValue} 
+        setActiveStep={setActiveStep} 
+        activeStep={step} 
+        invoiceId={invoiceId}
+        values={values}
         />;
       case 2:
         return <ReviewOrder />;
@@ -57,6 +62,7 @@ export default function CheckoutPage(props) {
         return <div>Not Found</div>;
     }
   }
+
 
   async function _submitForm(values, actions) {
     try {
@@ -81,12 +87,14 @@ export default function CheckoutPage(props) {
       }
 
       const { data } = await api.post("/subscription", newValues);
-      console.log(data);
-      setDatePayment(data)
-      actions.setSubmitting(false);
-      setActiveStep(activeStep + 1);
+      setDatePayment(data);
+      setPaymentText("Ao realizar o pagamento, atualize a página!");
+      window.open(data.urlMcPg, '_blank');
+      actions.setSubmitting(true);
+      //setActiveStep(activeStep + 1);
       toast.success("Assinatura realizada com sucesso!, aguardando a realização do pagamento");
     } catch (err) {
+      actions.setSubmitting(false);
       toastError(err);
     }
   }
@@ -123,7 +131,7 @@ export default function CheckoutPage(props) {
         ) : (
           <Formik
             initialValues={{
-              ...user,
+              ...user, 
               ...formInitialValues
             }}
             validationSchema={currentValidationSchema}
@@ -134,7 +142,7 @@ export default function CheckoutPage(props) {
                 {_renderStepContent(activeStep, setFieldValue, setActiveStep, values)}
 
                 <div className={classes.buttons}>
-                  {activeStep !== 1 && activeStep !== 0 && (
+                  {activeStep !== 1 && (
                     <Button onClick={_handleBack} className={classes.button}>
                       VOLTAR
                     </Button>
@@ -159,6 +167,13 @@ export default function CheckoutPage(props) {
                     )}
                   </div>
                 </div>
+                {paymentText && (
+  <div style={{ backgroundColor: '#f0f0f0', padding: '10px', borderRadius: '8px', marginTop: '10px' }}>
+    <Typography variant="h5" align="center" style={{ color: '#ff5722', fontWeight: 'bold', fontFamily: 'cursive' }}>
+      {paymentText}
+    </Typography>
+  </div>
+)}
               </Form>
             )}
           </Formik>

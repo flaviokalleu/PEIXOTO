@@ -4716,9 +4716,19 @@ const handleMessage = async (
           id: ticket.flowStopped
         }
       });
+
+      if (!flow) {
+        console.error("Flow not found for ticket:", ticket.id);
+        return;
+      }
+
       const nodes: INodes[] = flow.flow["nodes"];
       const lastFlow = nodes.find(f => f.id === ticket.lastFlowId);
-      const typebot = lastFlow.data.typebotIntegration;
+
+      if (!lastFlow || !lastFlow.data.typebotIntegration) {
+        console.error("Last flow or integration not found for ticket:", ticket.id);
+        return;
+      }
 
       await typebotListener({
         wbot: wbot,

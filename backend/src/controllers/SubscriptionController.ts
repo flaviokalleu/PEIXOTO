@@ -32,16 +32,25 @@ export const createSubscription = async (
   const unitPrice = parseFloat(price);
 
   // Buscar o accessToken da tabela Settings
+  let accessToken;
+  
+  // Primeiro tenta buscar com companyId = 1
   const setting = await Setting.findOne({
-    where: { companyId, key: 'mpaccesstoken' },
-    attributes: ['value'] // Buscar apenas a coluna value
+    where: { companyId: 1, key: 'mpaccesstoken' },
+    attributes: ['value']
   });
 
-  if (!setting || !setting.value) {
-    throw new AppError("Mercado Pago access token not found in settings", 400);
+  if (setting?.value) {
+    accessToken = setting.value;
+    console.log('Using access token from company 1');
+  } else {
+    // Fallback para variável de ambiente
+    accessToken = process.env.MP_ACCESS_TOKEN;
+    if (!accessToken) {
+      throw new AppError("Mercado Pago access token not found in settings or environment", 400);
+    }
+    console.log('Using access token from environment variable');
   }
-
-  const accessToken = setting.value;
 
   // Dados para criar a preferência de pagamento
   const data = {
@@ -93,16 +102,20 @@ export const webhook = async (
   if (data && data.id) {
     try {
       // Buscar o accessToken da tabela Settings
+      let accessToken;
       const setting = await Setting.findOne({
-        where: { key: 'mpaccesstoken' }, // Ajuste companyId se necessário
-        attributes: ['value'] // Buscar apenas a coluna value
+        where: { companyId: 1, key: 'mpaccesstoken' },
+        attributes: ['value']
       });
 
-      if (!setting || !setting.value) {
-        throw new AppError("Mercado Pago access token not found in settings", 400);
+      if (setting?.value) {
+        accessToken = setting.value;
+      } else {
+        accessToken = process.env.MP_ACCESS_TOKEN;
+        if (!accessToken) {
+          throw new AppError("Mercado Pago access token not found in settings or environment", 400);
+        }
       }
-
-      const accessToken = setting.value;
 
       const paymentResponse = await axios.get(`https://api.mercadopago.com/v1/payments/${data.id}`, {
         headers: {
