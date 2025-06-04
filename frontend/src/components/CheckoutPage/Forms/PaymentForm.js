@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useContext } from 'react';
 import Button from '@material-ui/core/Button';
 import Card from '@material-ui/core/Card';
 import CardActions from '@material-ui/core/CardActions';
@@ -13,6 +13,7 @@ import IconButton from '@material-ui/core/IconButton';
 import MinimizeIcon from '@material-ui/icons/Minimize';
 import AddIcon from '@material-ui/icons/Add';
 import usePlans from "../../../hooks/usePlans";
+import { AuthContext } from "../../../context/Auth/AuthContext";
 
 const useStyles = makeStyles((theme) => ({
   '@global': {
@@ -76,7 +77,7 @@ export default function Pricing(props) {
   const [connectionsPlans, setConnectionsPlans] = React.useState(3);
   const [storagePlans, setStoragePlans] = React.useState([]);
   const [loading, setLoading] = React.useState(false);
-  //const [setLoading] = React.useState(false);
+  const { user, socket } = useContext(AuthContext);
 
   const { getPlanCompany } = usePlans();
 
@@ -91,7 +92,7 @@ export default function Pricing(props) {
   const loadPlans = async () => {
     setLoading(true);
     try {
-      const companyId = localStorage.getItem("companyId");
+      const companyId = user.companyId;
       const _planList = await getPlanCompany(undefined, companyId);
 
       const planList = _planList.plan;
@@ -178,11 +179,11 @@ export default function Pricing(props) {
                     {
                       tier.custom ?
                         <React.Fragment>
-                          R$ {customValuePlans.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          R${customValuePlans.toLocaleString('pt-br', { minimumFractionDigits: 2 })}
                         </React.Fragment>
                         :
                         <React.Fragment>
-                          R$ {tier.price.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          R${tier.price.toLocaleString('pt-br', { minimumFractionDigits: 2 })}
                         </React.Fragment>
                     }
                   </Typography>

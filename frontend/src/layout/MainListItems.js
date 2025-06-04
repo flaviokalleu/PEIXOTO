@@ -44,22 +44,42 @@ import usePlans from "../hooks/usePlans";
 import useVersion from "../hooks/useVersion";
 import useHelps from "../hooks/useHelps";
 import { i18n } from "../translate/i18n";
+import moment from "moment";
 
 function ListItemLink({ icon, primary, to, tooltip, showBadge }) {
   const { activeMenu } = useActiveMenu();
   const location = useLocation();
+  const { user } = useContext(AuthContext);
   const isActive = activeMenu === to || location.pathname === to;
+
+  // Add this function inside ListItemLink
+  const checkSubscriptionValid = () => {
+    if (!user?.company?.dueDate) return false;
+    if (user.company.id === 1) return true;
+    if (to === '/financeiro') return true;
+    
+    const dueDate = moment(user.company.dueDate);
+    const today = moment();
+    return today.isBefore(dueDate);
+  };
+
+  const isDisabled = !checkSubscriptionValid();
 
   return (
     <li className="mb-1">
-      <div className="group relative">
+      <div className={`group relative ${isDisabled ? 'opacity-50 pointer-events-none' : ''}`}>
         <RouterLink
-          to={to}
+          to={isDisabled ? '#' : to}
           className={`flex items-center gap-3 px-3 py-2.5 mx-2 rounded-lg transition-all duration-200 ease-in-out ${
             isActive
               ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg shadow-blue-500/25"
               : "text-gray-600 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700/50 hover:text-gray-900 dark:hover:text-white"
           }`}
+          onClick={(e) => {
+            if (isDisabled) {
+              e.preventDefault();
+            }
+          }}
         >
           <div
             className={`flex items-center justify-center w-8 h-8 rounded-md transition-all duration-200 ${
@@ -173,6 +193,7 @@ const MainListItems = ({ collapsed, drawerClose }) => {
   const [chats, dispatch] = useReducer(reducer, []);
   const [version, setVersion] = useState(false);
   const [hasHelps, setHasHelps] = useState(false);
+  const [isSubscriptionValid, setIsSubscriptionValid] = useState(true);
 
   const { list } = useHelps();
   const { getPlanCompany } = usePlans();
@@ -294,6 +315,27 @@ const MainListItems = ({ collapsed, drawerClose }) => {
       toastError(err);
     }
   };
+
+  useEffect(() => {
+    const checkSubscription = () => {
+      if (!user?.company?.dueDate) {
+        setIsSubscriptionValid(false);
+        return;
+      }
+      
+      // Company ID 1 is always valid (admin)
+      if (user.company.id === 1) {
+        setIsSubscriptionValid(true);
+        return;
+      }
+
+      const dueDate = moment(user.company.dueDate);
+      const today = moment();
+      setIsSubscriptionValid(today.isBefore(dueDate));
+    };
+
+    checkSubscription();
+  }, [user]);
 
   return (
     <div

@@ -255,6 +255,7 @@ const Invoices = () => {
   const [selectedContactId, setSelectedContactId] = useState(null);
   const [contactModalOpen, setContactModalOpen] = useState(false);
   const [companyPlan, setCompanyPlan] = useState(null);
+  const [isLoadingPlan, setIsLoadingPlan] = useState(true);
 
   const handleOpenContactModal = (invoice) => {
     // Create a copy of the invoice but replace the value with the plan amount
@@ -280,24 +281,34 @@ const Invoices = () => {
 
   // Fetch Company info first, then get the plan using the planId
   useEffect(() => {
+    let isMounted = true;
     const fetchCompanyPlan = async () => {
       try {
-        if (user && user.companyId) {
-          // First get the company info to access its planId
+        setIsLoadingPlan(true);
+        if (user && user.companyId && isMounted) {
           const companyResponse = await api.get(`/companies/${user.companyId}`);
           const company = companyResponse.data;
           
-          if (company && company.planId) {
-            // Now use the planId to get the plan details
+          if (company && company.planId && isMounted) {
             const planResponse = await api.get(`/plans/${company.planId}`);
             setCompanyPlan(planResponse.data);
           }
         }
       } catch (err) {
-        toastError(err);
+        if (isMounted) {
+          toastError(err);
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingPlan(false);
+        }
       }
     };
     fetchCompanyPlan();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [user]);
 
   useEffect(() => {
@@ -578,66 +589,70 @@ const Invoices = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {invoices.map((invoice) => {
-                  const statusInfo = getInvoiceStatus(invoice);
-                  return (
-                    <TableRow 
-                      key={invoice.id} 
-                      style={rowStyle(invoice)} 
-                      className={classes.tableRow}
-                    >
-                      <TableCell className={classes.tableCell}>{companyPlan.name}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.users}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
-                      <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
-                      <TableCell className={classes.tableCell} align="center" style={{ fontWeight: 'bold' }}>
-                        {companyPlan && companyPlan.amount 
-                          ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
-                          : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
-                        <Box display="flex" flexDirection="column">
-                          <Typography variant="body2">
-                            {moment(invoice.dueDate).format("DD/MM/YYYY")}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {renderDaysLeft(invoice)}
-                          </Typography>
-                        </Box>
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
-                        <Chip
-                          icon={statusInfo.icon}
-                          label={statusInfo.text}
-                          className={statusInfo.chip}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell className={classes.tableCell} align="center">
-                        {statusInfo.text !== "Pago" ? (
-                          <Button
+                {isLoadingPlan ? (
+                  <TableRowSkeleton columns={8} />
+                ) : (
+                  invoices.map((invoice) => {
+                    const statusInfo = getInvoiceStatus(invoice);
+                    return (
+                      <TableRow 
+                        key={invoice.id} 
+                        style={rowStyle(invoice)} 
+                        className={classes.tableRow}
+                      >
+                        <TableCell className={classes.tableCell}>{companyPlan.name}</TableCell>
+                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.users}</TableCell>
+                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
+                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
+                        <TableCell className={classes.tableCell} align="center" style={{ fontWeight: 'bold' }}>
+                          {companyPlan && companyPlan.amount 
+                            ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
+                            : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          <Box display="flex" flexDirection="column">
+                            <Typography variant="body2">
+                              {moment(invoice.dueDate).format("DD/MM/YYYY")}
+                            </Typography>
+                            <Typography variant="caption" color="textSecondary">
+                              {renderDaysLeft(invoice)}
+                            </Typography>
+                          </Box>
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          <Chip
+                            icon={statusInfo.icon}
+                            label={statusInfo.text}
+                            className={statusInfo.chip}
                             size="small"
-                            variant="contained"
-                            className={classes.paymentButton}
-                            startIcon={<PaymentIcon />}
-                            onClick={() => handleOpenContactModal(invoice)}
-                          >
-                            PAGAR
-                          </Button>
-                        ) : (
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            className={classes.paidButton}
-                            startIcon={<CheckCircleIcon />}
-                          >
-                            PAGO
-                          </Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                          />
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          {statusInfo.text !== "Pago" ? (
+                            <Button
+                              size="small"
+                              variant="contained"
+                              className={classes.paymentButton}
+                              startIcon={<PaymentIcon />}
+                              onClick={() => handleOpenContactModal(invoice)}
+                            >
+                              PAGAR
+                            </Button>
+                          ) : (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              className={classes.paidButton}
+                              startIcon={<CheckCircleIcon />}
+                            >
+                              PAGO
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
                 {loading && <TableRowSkeleton columns={8} />}
               </TableBody>
             </Table>

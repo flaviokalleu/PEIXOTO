@@ -66,36 +66,67 @@ export default function CheckoutPage(props) {
 
   async function _submitForm(values, actions) {
     try {
+      if (!values.plan) {
+        throw new Error("Plano não selecionado");
+      }
+
       const plan = JSON.parse(values.plan);
-      const newValues = {
-        firstName: values.firstName,
-        lastName: values.lastName,
-        address2: values.address2,
-        city: values.city,
-        state: values.state,
-        zipcode: values.zipcode,
-        country: values.country,
+      
+      // Format the payload
+      const payload = {
+        firstName: values.firstName?.trim(),
+        lastName: values.lastName?.trim(),
+        address2: values.address2?.trim(),
+        city: values.city?.trim(),
+        state: values.state?.trim(),
+        zipcode: values.zipcode?.trim(),
+        country: values.country?.trim(),
         useAddressForPaymentDetails: values.useAddressForPaymentDetails,
-        nameOnCard: values.nameOnCard,
-        cardNumber: values.cardNumber,
-        cvv: values.cvv,
+        nameOnCard: values.nameOnCard?.trim(),
+        cardNumber: values.cardNumber?.replace(/\D/g, ''),
+
+        cvv: values.cvv?.trim(),
         plan: values.plan,
         price: plan.price,
         users: plan.users,
         connections: plan.connections,
         invoiceId: invoiceId
+      };
+
+      // Make API call with authorization header
+      const { data } = await api.post("/subscription", payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          // Make sure the token is being passed from your auth context
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (!data) {
+        throw new Error("Erro ao processar assinatura");
       }
 
-      const { data } = await api.post("/subscription", newValues);
-      setDatePayment(data);
-      setPaymentText("Ao realizar o pagamento, atualize a página!");
-      window.open(data.urlMcPg, '_blank');
-      actions.setSubmitting(true);
-      //setActiveStep(activeStep + 1);
-      toast.success("Assinatura realizada com sucesso!, aguardando a realização do pagamento");
+      if (data.urlMcPg) {
+        setDatePayment(data);
+        setPaymentText("Ao realizar o pagamento, atualize a página!");
+        window.open(data.urlMcPg, '_blank');
+        actions.setSubmitting(false);
+        toast.success("Assinatura realizada com sucesso! Aguardando a realização do pagamento");
+      } else {
+        throw new Error("URL de pagamento não gerada");
+      }
+
     } catch (err) {
       actions.setSubmitting(false);
-      toastError(err);
+      
+      if (err.response?.status === 401) {
+        toast.error("Sessão expirada. Por favor, faça login novamente.");
+        // Redirect to login or refresh token
+        return;
+      }
+
+      const errorMessage = err.response?.data?.message || err.message || "Erro ao processar pagamento";
+      toast.error(errorMessage);
     }
   }
 
