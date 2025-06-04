@@ -294,22 +294,33 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const settings = useSettings();
 
   useEffect(() => {
-    const getSetting = async () => {
-      const response = await settings.get("wtV");
+    let isMounted = true;
+    
+    const fetchData = async () => {
+      try {
+        const response = await settings.get("wtV");
 
 
-      if (response) {
+        if (response) {
 
-        setUserToken("disabled");
+          setUserToken("disabled");
 
-      } else {
-        setUserToken("disabled");
+        } else {
+          setUserToken("disabled");
+        }
+      } catch (err) {
+        if (isMounted) {
+          // handle error
+        }
       }
     };
 
-    getSetting();
-  });
+    fetchData();
 
+    return () => {
+      isMounted = false;
+    };
+  }, [settings]);
   
 
   useEffect(() => {

@@ -59,9 +59,10 @@ export const createSubscription = async (
   const preference = {
     back_urls: {
       success: `${process.env.FRONTEND_URL}/financeiro`,
-      failure: `${process.env.FRONTEND_URL}/financeiro`
+      failure: `${process.env.FRONTEND_URL}/financeiro`,
+      pending: `${process.env.FRONTEND_URL}/financeiro`
     },
-    auto_return: "approved",
+    notification_url: `${process.env.BACKEND_URL}/subscription/webhook`,
     items: [
       {
         id: `${invoiceId}`,
@@ -70,7 +71,11 @@ export const createSubscription = async (
         currency_id: 'BRL',
         unit_price: unitPrice
       }
-    ]
+    ],
+    statement_descriptor: "Witicket",
+    payment_methods: {
+      installments: 1
+    }
   };
 
   try {

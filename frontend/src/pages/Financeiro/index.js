@@ -42,6 +42,7 @@ import api from "../../services/api";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import ErrorBoundary from '../../components/ErrorBoundary';
 
 import moment from "moment";
 
@@ -285,18 +286,25 @@ const Invoices = () => {
     const fetchCompanyPlan = async () => {
       try {
         setIsLoadingPlan(true);
-        if (user && user.companyId && isMounted) {
+        if (user?.companyId) {
           const companyResponse = await api.get(`/companies/${user.companyId}`);
           const company = companyResponse.data;
           
-          if (company && company.planId && isMounted) {
-            const planResponse = await api.get(`/plans/${company.planId}`);
-            setCompanyPlan(planResponse.data);
+          if (company?.planId && isMounted) {
+            try {
+              const planResponse = await api.get(`/plans/${company.planId}`);
+              setCompanyPlan(planResponse.data);
+            } catch (err) {
+              console.error("Error fetching plan:", err);
+              setCompanyPlan(null);
+            }
           }
         }
       } catch (err) {
+        console.error("Error fetching company:", err);
         if (isMounted) {
           toastError(err);
+          setCompanyPlan(null);
         }
       } finally {
         if (isMounted) {
@@ -304,6 +312,7 @@ const Invoices = () => {
         }
       }
     };
+    
     fetchCompanyPlan();
     
     return () => {
@@ -600,14 +609,23 @@ const Invoices = () => {
                         style={rowStyle(invoice)} 
                         className={classes.tableRow}
                       >
-                        <TableCell className={classes.tableCell}>{companyPlan.name}</TableCell>
-                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.users}</TableCell>
-                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.connections}</TableCell>
-                        <TableCell className={classes.tableCell} align="center">{companyPlan && companyPlan.queues}</TableCell>
+                        <TableCell className={classes.tableCell}>
+                          {companyPlan?.name || 'Carregando...'}
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          {companyPlan?.users || '-'}
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          {companyPlan?.connections || '-'}
+                        </TableCell>
+                        <TableCell className={classes.tableCell} align="center">
+                          {companyPlan?.queues || '-'}
+                        </TableCell>
                         <TableCell className={classes.tableCell} align="center" style={{ fontWeight: 'bold' }}>
-                          {companyPlan && companyPlan.amount 
-                            ? parseFloat(companyPlan.amount).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })
-                            : invoice.value.toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
+                          {(companyPlan?.amount 
+                            ? parseFloat(companyPlan.amount)
+                            : invoice.value
+                          ).toLocaleString('pt-br', { style: 'currency', currency: 'BRL' })}
                         </TableCell>
                         <TableCell className={classes.tableCell} align="center">
                           <Box display="flex" flexDirection="column">
@@ -663,4 +681,10 @@ const Invoices = () => {
   );
 };
 
-export default Invoices;
+const InvoicesWithErrorBoundary = () => (
+  <ErrorBoundary>
+    <Invoices />
+  </ErrorBoundary>
+);
+
+export default InvoicesWithErrorBoundary;
