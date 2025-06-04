@@ -4703,39 +4703,47 @@ const handleMessage = async (
       );
     }
 
-    if (
+    if(
       !isNil(ticket.typebotSessionId) &&
       ticket.typebotStatus &&
       !msg.key.fromMe &&
       !isNil(ticket.typebotSessionTime) &&
       ticket.useIntegration
-    ) {
-      console.log("|================== CONTINUE TYPEBO ==============|");
-      const flow = await FlowBuilderModel.findOne({
-        where: {
-          id: ticket.flowStopped
-        }
+    ){
+      console.log("|================== CONTINUE TYPEBOT ==============|");
+      console.log("Ticket data:", {
+        typebotSessionId: ticket.typebotSessionId,
+        typebotStatus: ticket.typebotStatus,
+        flowStopped: ticket.flowStopped,
+        lastFlowId: ticket.lastFlowId
       });
 
-      if (!flow) {
-        console.error("Flow not found for ticket:", ticket.id);
-        return;
+      try {
+        console.log("Attempting to call typebotListener");
+        const integration = await QueueIntegrations.findByPk(ticket.integrationId);
+        await typebotListener({
+          wbot,
+          msg,
+          ticket,
+          typebot: integration
+        });
+        console.log("typebotListener completed successfully");
+
+        // Update session time after successful interaction
+        await ticket.update({
+          typebotSessionTime: moment().toDate()
+        });
+
+      } catch (error) {
+        console.error("Error in typebotListener:", error);
+        await ticket.update({
+          typebotSessionId: null,
+          typebotStatus: false, 
+          typebotSessionTime: null,
+          useIntegration: false
+        });
       }
-
-      const nodes: INodes[] = flow.flow["nodes"];
-      const lastFlow = nodes.find(f => f.id === ticket.lastFlowId);
-
-      if (!lastFlow || !lastFlow.data.typebotIntegration) {
-        console.error("Last flow or integration not found for ticket:", ticket.id);
-        return;
-      }
-
-      await typebotListener({
-        wbot: wbot,
-        msg,
-        ticket,
-        typebot: lastFlow.data.typebotIntegration
-      });
+      
       return;
     }
 
