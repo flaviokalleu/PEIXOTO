@@ -1,6 +1,6 @@
 {
-    "short_name": "Parnazap",
-    "name": "Parnazap - Enterprise Solution",
+    "short_name": "%APP_NAME%",
+    "name": "%APP_NAME% - Enterprise Solution",
     "version": "2.0.0",
     "lang": "pt-BR",
     "dir": "ltr",
@@ -73,7 +73,7 @@
         "communication",
         "utilities"
     ],
-    "description": "Parnazap - Plataforma Profissional de Atendimento Multicanal",
+    "description": "%APP_NAME% - Plataforma Profissional de Atendimento Multicanal",
     "screenshots": [
         {
             "src": "/screenshots/dashboard-desktop.png",

@@ -139,7 +139,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bem-vindo(a) à MetaBot</title>
+  <title>Bem-vindo(a) à ${process.env.APP_NAME}</title>
 </head>
 <body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f0f4f8; color: #333;">
   <table role="presentation" style="width: 100%; max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);">

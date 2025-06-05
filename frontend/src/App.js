@@ -177,7 +177,7 @@ const App = () => {
       })
       .catch((error) => {
         console.log("!==== Erro ao carregar temas: ====!", error);
-        setAppName("WicketChat");
+        setAppName(process.env.REACT_APP_NAME); // Use REACT_APP_ prefix for React apps
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

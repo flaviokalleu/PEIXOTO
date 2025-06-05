@@ -3,12 +3,14 @@ import { useHistory } from "react-router-dom";
 
 import { Can } from "../Can";
 import { makeStyles } from "@material-ui/core/styles";
-import { IconButton, Menu } from "@material-ui/core";
-import { DeviceHubOutlined, History, MoreVert, PictureAsPdf, Replay, SwapHorizOutlined } from "@material-ui/icons";
+import { IconButton, Menu, CircularProgress } from "@material-ui/core";
+import { DeviceHubOutlined, History, MoreVert, PictureAsPdf, Replay, SwapHorizOutlined, Call, CallEnd, PhoneDisabled } from "@material-ui/icons";
 import { v4 as uuidv4 } from "uuid";
 
 import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
+import wavoipService from '../../services/wavoip';
+
 // import TicketOptionsMenu from "../TicketOptionsMenu";
 import ButtonWithSpinner from "../ButtonWithSpinner";
 import toastError from "../../errors/toastError";
@@ -64,6 +66,27 @@ const useStyles = makeStyles(theme => ({
         maxWidth: "100%",
         // alignItems: "center"
 
+    },
+    callActive: {
+        animation: '$pulse 1.5s infinite',
+        color: theme.palette.success.main
+    },
+    '@keyframes pulse': {
+        '0%': {
+            transform: 'scale(1)',
+            opacity: 1
+        },
+        '50%': {
+            transform: 'scale(1.2)',
+            opacity: 0.7
+        },
+        '100%': {
+            transform: 'scale(1)',
+            opacity: 1
+        }
+    },
+    callButton: {
+        margin: theme.spacing(0, 1)
     }
 }));
 
@@ -109,6 +132,10 @@ const TicketActionButtonsCustom = ({ ticket
 
     const [anchorEl, setAnchorEl] = useState(null);
     const [menuOpen, setMenuOpen] = useState(false);
+
+    const [isCallActive, setIsCallActive] = useState(false);
+    const [isCallLoading, setIsCallLoading] = useState(false);
+    const [callStatus, setCallStatus] = useState(null);
 
     useEffect(() => {
         fetchData();
@@ -375,6 +402,79 @@ const TicketActionButtonsCustom = ({ ticket
         }
     };
 
+    const handleInitiateCall = async () => {
+        setIsCallLoading(true);
+        try {
+            // Start Wavoip call
+            const callResponse = await wavoipService.initiateCall(ticket.contact.number);
+            
+            if (callResponse.success) {
+                // Update ticket with call information
+                await api.post(`/tickets/${ticket.id}/calls`, {
+                    callId: callResponse.callId,
+                    status: 'in-progress',
+                    userId: user.id
+                });
+
+                setIsCallActive(true);
+                setCallStatus('connected');
+                toast.success('Chamada iniciada com sucesso');
+            }
+        } catch (err) {
+            toast.error('Erro ao iniciar chamada: ' + (err.message || 'Erro desconhecido'));
+            console.error('Call error:', err);
+        } finally {
+            setIsCallLoading(false);
+        }
+    };
+
+    const handleEndCall = async () => {
+        setIsCallLoading(true);
+        try {
+            // Get active call ID from ticket
+            const { data: ticketData } = await api.get(`/tickets/${ticket.id}/calls/active`);
+            
+            if (ticketData.callId) {
+                // End Wavoip call
+                await wavoipService.endCall(ticketData.callId);
+                
+                // Update ticket call status
+                await api.put(`/tickets/${ticket.id}/calls/${ticketData.callId}`, {
+                    status: 'ended',
+                    endedAt: new Date()
+                });
+
+                setIsCallActive(false);
+                setCallStatus(null);
+                toast.success('Chamada finalizada com sucesso');
+            }
+        } catch (err) {
+            toast.error('Erro ao finalizar chamada: ' + (err.message || 'Erro desconhecido'));
+            console.error('End call error:', err);
+        } finally {
+            setIsCallLoading(false);
+        }
+    };
+
+    // Add useEffect to handle call status updates
+    useEffect(() => {
+        if (ticket?.id) {
+            const checkActiveCall = async () => {
+                try {
+                    const { data } = await api.get(`/tickets/${ticket.id}/calls/active`);
+                    if (data && data.status === 'in-progress') {
+                        setIsCallActive(true);
+                        setCallStatus('connected');
+                    }
+                } catch (err) {
+                    console.error('Error checking active call:', err);
+                }
+            };
+            
+            checkActiveCall();
+        }
+    }, [ticket]);
+
     return (
         <>
             {openAlert && (
@@ -445,7 +545,7 @@ const TicketActionButtonsCustom = ({ ticket
                                 onClick={handleEnableIntegration}
                             >
                                 <Tooltip title={i18n.t("messagesList.header.buttons.enableIntegration")}>
-                                    {enableIntegration === true ? <DeviceHubOutlined style={{ color: "green" }} /> : <DeviceHubOutlined />}
+                                    {enableIntegration === true ? <DeviceHubOutlined style={{ color: "green" }} : <DeviceHubOutlined />}
 
                                 </Tooltip>
                             </IconButton> */}
@@ -600,6 +700,23 @@ const TicketActionButtonsCustom = ({ ticket
                     </MenuItem>
                 </Menu>
             </div>
+            {ticket.status === "open" && (
+                <IconButton 
+                    className={classes.bottomButtonVisibilityIcon}
+                    onClick={isCallActive ? handleEndCall : handleInitiateCall}
+                    disabled={isCallLoading}
+                >
+                    <Tooltip title={isCallActive ? "Encerrar Chamada" : "Iniciar Chamada VoIP"}>
+                        {isCallLoading ? (
+                            <CircularProgress size={24} />
+                        ) : isCallActive ? (
+                            <CallEnd style={{ color: theme.palette.error.main }} />
+                        ) : (
+                            <Call />
+                        )}
+                    </Tooltip>
+                </IconButton>
+            )}
             <>
                 <Formik
                     enableReinitialize={true}
