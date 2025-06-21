@@ -26,6 +26,14 @@ const PixPreview = ({ companyId, avatarUser, avatarName, avatarUrl, name, numero
     const profileImage = avatarUser;
     const avatarUserUrl = `${backendUrl}/public/company${companyId}/user/${profileImage}`;
     
+    // Adicionar tratamento de erro para imagem
+    const [imageError, setImageError] = useState(false);
+    
+    const handleImageError = () => {
+        setImageError(true);
+    };
+    
+    // Verificar se as URLs estão sendo montadas corretamente
     console.log("Avatar:", avatarUserUrl);
     console.log("Avatar User URL:", avatarUserUrl);
     

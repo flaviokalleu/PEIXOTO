@@ -56,45 +56,63 @@ export const endCall = async (req: Request, res: Response): Promise<Response> =>
 };
 
 export const getCallStatus = async (req: Request, res: Response): Promise<Response> => {
-    const { ticketId } = req.params;
-
     try {
-        const ticket = await Ticket.findByPk(ticketId);
-        if (!ticket) {
-            throw new AppError("Ticket not found", 404);
-        }
+        const { ticketId } = req.params;
 
-        const activeCall = await Call.findOne({
-            where: {
-                ticketId,
-                status: "in-progress"
-            },
-            order: [["createdAt", "DESC"]],
-            include: [
-                {
-                    model: User,
-                    attributes: ["id", "name"]
-                }
-            ]
-        });
-
-        if (!activeCall) {
-            return res.status(404).json({
+        if (!ticketId) {
+            return res.status(400).json({
                 success: false,
-                message: "No active call found"
+                message: "Ticket ID is required"
             });
         }
 
-        return res.status(200).json({
-            success: true,
-            callId: activeCall.callId,
-            status: activeCall.status,
-            startedAt: activeCall.createdAt,
-            user: activeCall.user
-        });
+        // Verificar se a model Call está disponível
+        try {
+            const activeCall = await Call.findOne({
+                where: {
+                    ticketId,
+                    status: "in-progress"
+                },
+                order: [["createdAt", "DESC"]],
+                include: [
+                    {
+                        model: User,
+                        attributes: ["id", "name"]
+                    }
+                ]
+            });
+
+            if (!activeCall) {
+                return res.status(404).json({
+                    success: false,
+                    message: "No active call found"
+                });
+            }
+
+            return res.status(200).json({
+                success: true,
+                callId: activeCall.callId,
+                status: activeCall.status,
+                startedAt: activeCall.createdAt,
+                user: activeCall.user
+            });
+        } catch (dbError: any) {
+            // Se a tabela não existir, retornar erro específico
+            if (dbError.message?.includes('relation "Calls" does not exist')) {
+                console.error("Calls table does not exist. Please run migrations.");
+                return res.status(500).json({
+                    success: false,
+                    message: "Call feature not configured. Please contact administrator."
+                });
+            }
+            throw dbError;
+        }
 
     } catch (err) {
         console.error("Error getting call status:", err);
-        throw new AppError("Error retrieving call status", 500);
+        return res.status(500).json({
+            success: false,
+            message: "Error retrieving call status"
+        });
     }
 };

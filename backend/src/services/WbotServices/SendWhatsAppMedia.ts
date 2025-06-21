@@ -50,17 +50,28 @@ interface CacheInfo {
 }
 
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
+// Cache em diretório fora da pasta de código para evitar restart do nodemon
+const cacheBaseDir = process.env.CACHE_DIR || path.resolve(process.cwd(), "..", "media-cache");
 
 // Utilitário para gerar hash de arquivos
-const generateFileHash = (filePath: string): string => {
+// Melhoria na função generateFileHash para ser mais inteligente
+const generateFileHash = (filePath: string, originalName?: string): string => {
   try {
+    // Para arquivos do FlowBuilder, usar o nome original como base
+    if (originalName && (filePath.includes('flowbuilder') || filePath.includes('typebot'))) {
+      const fileBuffer = fs.readFileSync(filePath);
+      // Usar nome original + tamanho + hash do conteúdo para garantir unicidade
+      const contentHash = crypto.createHash('sha256').update(fileBuffer).digest('hex').substring(0, 16);
+      return crypto.createHash('md5').update(`${originalName}_${fileBuffer.length}_${contentHash}`).digest('hex');
+    }
+    
     const fileBuffer = fs.readFileSync(filePath);
     return crypto.createHash('sha256').update(fileBuffer).digest('hex');
   } catch (error) {
     console.error('Erro ao gerar hash do arquivo:', error);
-    // Fallback: usar stats do arquivo
     const stats = fs.statSync(filePath);
-    return crypto.createHash('md5').update(`${path.basename(filePath)}_${stats.size}_${stats.mtimeMs}`).digest('hex');
+    const baseName = originalName || path.basename(filePath);
+    return crypto.createHash('md5').update(`${baseName}_${stats.size}_${stats.mtimeMs}`).digest('hex');
   }
 };
 
@@ -71,9 +82,10 @@ class MediaCacheManager {
   private cacheIndex: Map<string, CacheInfo> = new Map();
   private maxCacheSize: number = 1024 * 1024 * 1024; // 1GB
   private cleanupInterval: NodeJS.Timeout;
+  private saveTimeout: NodeJS.Timeout | null = null;
 
   constructor() {
-    this.cacheDir = path.resolve(publicFolder, 'media-cache');
+    this.cacheDir = cacheBaseDir;
     this.ensureCacheDir();
     this.loadCacheIndex();
     this.startCleanupRoutine();
@@ -123,13 +135,21 @@ class MediaCacheManager {
   }
 
   private saveCacheIndex(): void {
-    const indexFile = path.join(this.cacheDir, 'cache-index.json');
-    try {
-      const indexData = Object.fromEntries(this.cacheIndex);
-      fs.writeFileSync(indexFile, JSON.stringify(indexData, null, 2));
-    } catch (error) {
-      console.warn('Erro ao salvar índice do cache:', error);
+    // Usar timeout para evitar escritas muito frequentes
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
     }
+
+    this.saveTimeout = setTimeout(() => {
+      const indexFile = path.join(this.cacheDir, 'cache-index.json');
+      try {
+        const indexData = Object.fromEntries(this.cacheIndex);
+        fs.writeFileSync(indexFile, JSON.stringify(indexData, null, 2));
+      } catch (error) {
+        console.warn('Erro ao salvar índice do cache:', error);
+      }
+      this.saveTimeout = null;
+    }, 2000); // Salvar após 2 segundos de inatividade
   }
 
   getCachedFile(hash: string): string | null {
@@ -147,14 +167,59 @@ class MediaCacheManager {
     if (cached && !fs.existsSync(cached.path)) {
       // Remover entrada inválida
       this.cacheIndex.delete(hash);
+      this.saveCacheIndex();
     }
     
     return null;
   }
 
+  // Método específico para arquivos do FlowBuilder
+  getCachedFlowBuilderFile(originalName: string, fileSize: number, type: string): string | null {
+    // Buscar por arquivos similares no cache baseado no nome original e tamanho
+    for (const [hash, cacheInfo] of this.cacheIndex.entries()) {
+      if (cacheInfo.type === type && 
+          cacheInfo.originalName === originalName && 
+          Math.abs(cacheInfo.size - fileSize) < 1024) { // Tolerância de 1KB
+        
+        if (fs.existsSync(cacheInfo.path)) {
+          // Atualizar último acesso
+          cacheInfo.lastAccess = Date.now();
+          this.cacheIndex.set(hash, cacheInfo);
+          
+          console.log(`FlowBuilder: Arquivo reutilizado do cache: ${originalName} (${this.formatBytes(cacheInfo.size)})`);
+          return cacheInfo.path;
+        } else {
+          // Remover entrada inválida
+          this.cacheIndex.delete(hash);
+          this.saveCacheIndex();
+        }
+      }
+    }
+    
+    return null;
+  }
+
+  // Método para adicionar arquivo do FlowBuilder ao cache de forma inteligente
+  addFlowBuilderToCache(filePath: string, type: string, originalName: string): string {
+    const stats = fs.statSync(filePath);
+    
+    // Verificar se já existe arquivo similar no cache
+    const existingFile = this.getCachedFlowBuilderFile(originalName, stats.size, type);
+    if (existingFile) {
+      return existingFile;
+    }
+
+    // Gerar hash usando nome original
+    const fileHash = generateFileHash(filePath, originalName);
+    
+    // Adicionar ao cache normalmente
+    return this.addToCache(fileHash, filePath, type, originalName);
+  }
+
   addToCache(hash: string, filePath: string, type: string, originalName: string): string {
     if (this.cacheIndex.has(hash)) {
-      return this.getCachedFile(hash)!;
+      const existing = this.getCachedFile(hash);
+      if (existing) return existing;
     }
 
     try {
@@ -163,8 +228,10 @@ class MediaCacheManager {
       const cacheFileName = `${hash.substring(0, 16)}${ext}`;
       const cachePath = path.join(this.cacheDir, type, cacheFileName);
 
-      // Copiar arquivo para o cache
-      fs.copyFileSync(filePath, cachePath);
+      // Verificar se o arquivo já existe no cache (evitar cópia desnecessária)
+      if (!fs.existsSync(cachePath)) {
+        fs.copyFileSync(filePath, cachePath);
+      }
 
       // Adicionar ao índice
       this.cacheIndex.set(hash, {
@@ -177,7 +244,7 @@ class MediaCacheManager {
 
       console.log(`Arquivo adicionado ao cache: ${hash.substring(0, 8)}... (${originalName}, ${this.formatBytes(stats.size)})`);
       
-      // Salvar índice e verificar tamanho
+      // Salvar índice com delay e verificar tamanho
       this.saveCacheIndex();
       this.checkCacheSize();
       
@@ -227,11 +294,11 @@ class MediaCacheManager {
   }
 
   private startCleanupRoutine(): void {
-    // Limpeza automática a cada 30 minutos
+    // Limpeza automática a cada 1 hora (reduzido para evitar problemas)
     this.cleanupInterval = setInterval(() => {
       this.checkCacheSize();
       this.cleanOrphanedFiles();
-    }, 30 * 60 * 1000);
+    }, 60 * 60 * 1000); // 1 hora
   }
 
   private cleanOrphanedFiles(): void {
@@ -294,13 +361,25 @@ class MediaCacheManager {
       totalSize: this.formatBytes(totalSize),
       maxSize: this.formatBytes(this.maxCacheSize),
       utilization: `${((totalSize / this.maxCacheSize) * 100).toFixed(1)}%`,
-      typeBreakdown: typeStats
+      typeBreakdown: typeStats,
+      cacheDir: this.cacheDir
     };
   }
 
   destroy(): void {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
+    }
+    if (this.saveTimeout) {
+      clearTimeout(this.saveTimeout);
+      // Salvar imediatamente antes de destruir
+      const indexFile = path.join(this.cacheDir, 'cache-index.json');
+      try {
+        const indexData = Object.fromEntries(this.cacheIndex);
+        fs.writeFileSync(indexFile, JSON.stringify(indexData, null, 2));
+      } catch (error) {
+        console.warn('Erro ao salvar índice final do cache:', error);
+      }
     }
   }
 }
@@ -561,6 +640,95 @@ class MediaDownloadPool {
         
         this.sortQueue();
         console.log(`Mídia adicionada à fila: ${path.basename(mediaPath)} (posição ${this.queue.length}, prioridade ${priority})`);
+      }
+    });
+  }
+
+  async processFlowBuilderMedia(mediaPath: string, originalName: string, fileSize: number = 0, type: string = 'media'): Promise<string> {
+    // Verificar cache primeiro usando nome original
+    const cachedFile = this.cacheManager.getCachedFlowBuilderFile(originalName, fileSize, type);
+    if (cachedFile) {
+      this.monitor.recordCacheHit();
+      console.log(`FlowBuilder: Reutilizando arquivo ${originalName} do cache`);
+      return cachedFile;
+    }
+
+    this.monitor.recordCacheMiss();
+
+    return new Promise((resolve, reject) => {
+      const priority = this.getMediaPriority(fileSize);
+      
+      const processDownload = () => {
+        this.activeDownloads++;
+        const startTime = Date.now();
+        
+        console.log(`FlowBuilder: Processando ${originalName} pela primeira vez (${this.activeDownloads}/${this.maxDownloads})`);
+        
+        const timeout = this.calculateTimeout(fileSize);
+        const timeoutHandle = setTimeout(() => {
+          this.activeDownloads--;
+          this.processQueue();
+          const error = new Error(`Timeout no processamento de mídia após ${timeout}ms`);
+          this.monitor.recordProcessing(type, fileSize, Date.now() - startTime, false);
+          reject(error);
+        }, timeout);
+
+        setImmediate(() => {
+          try {
+            if (!fs.existsSync(mediaPath)) {
+              throw new Error('Arquivo não encontrado');
+            }
+
+            const stats = fs.statSync(mediaPath);
+            if (stats.size === 0) {
+              throw new Error('Arquivo vazio');
+            }
+
+            this.validateFileIntegrity(mediaPath, stats.size);
+
+            // Adicionar ao cache usando método específico do FlowBuilder
+            const cachedPath = this.cacheManager.addFlowBuilderToCache(
+              mediaPath, 
+              type, 
+              originalName
+            );
+            
+            const processingTime = Date.now() - startTime;
+            this.processingTimes.push(processingTime);
+            
+            if (this.processingTimes.length > 50) {
+              this.processingTimes = this.processingTimes.slice(-50);
+            }
+
+            console.log(`FlowBuilder: ${originalName} adicionado ao cache (${MediaCacheManager.getInstance()['formatBytes'](stats.size)}, ${processingTime}ms)`);
+            this.monitor.recordProcessing(type, stats.size, processingTime, true);
+            resolve(cachedPath);
+
+          } catch (error) {
+            console.error(`Erro no processamento: ${error.message}`);
+            this.monitor.recordProcessing(type, fileSize, Date.now() - startTime, false);
+            reject(error);
+          } finally {
+            clearTimeout(timeoutHandle);
+            this.activeDownloads--;
+            this.processQueue();
+          }
+        });
+      };
+
+      if (this.activeDownloads < this.maxDownloads) {
+        processDownload();
+      } else {
+        this.queue.push({ 
+          process: processDownload, 
+          priority, 
+          timestamp: Date.now(),
+          fileSize,
+          retries: 0
+        });
+        
+        this.sortQueue();
+        console.log(`FlowBuilder: ${originalName} adicionado à fila (posição ${this.queue.length}, prioridade ${priority})`);
       }
     });
   }
@@ -843,13 +1011,13 @@ const mediaPool = new MediaDownloadPool();
 const monitor = MediaProcessingMonitor.getInstance();
 const cacheManager = MediaCacheManager.getInstance();
 
-// Limpeza automática a cada 5 minutos
+// Limpeza automática a cada 30 minutos (reduzido)
 setInterval(() => {
   audioPool.cleanHistory();
   monitor.cleanup();
-}, 300000);
+}, 30 * 60 * 1000);
 
-// Log de status a cada 10 minutos
+// Log de status a cada 30 minutos (reduzido para evitar spam)
 setInterval(() => {
   const audioStatus = audioPool.getStatus();
   const mediaStatus = mediaPool.getStatus();
@@ -859,8 +1027,21 @@ setInterval(() => {
   console.log(`[STATUS] Áudio: ${audioStatus.activeProcesses}/${audioStatus.maxProcesses} ativos, ${audioStatus.queueSize} na fila`);
   console.log(`[STATUS] Mídia: ${mediaStatus.activeDownloads}/${mediaStatus.maxDownloads} ativos, ${mediaStatus.queueSize} na fila`);
   console.log(`[STATUS] Cache: ${cacheStatus.totalFiles} arquivos (${cacheStatus.totalSize}), Hit Rate: ${cacheStats.hitRate}`);
-  console.log(`[STATUS] CPU Load: ${audioStatus.systemLoad}, Cache Utilization: ${cacheStatus.utilization}`);
-}, 600000);
+  console.log(`[STATUS] Cache Dir: ${cacheStatus.cacheDir}`);
+}, 30 * 60 * 1000);
+
+// Cleanup no shutdown do processo
+process.on('SIGINT', () => {
+  console.log('Salvando cache antes de fechar...');
+  cacheManager.destroy();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('Salvando cache antes de fechar...');
+  cacheManager.destroy();
+  process.exit(0);
+});
 
 // Função otimizada para processamento de áudio
 const processAudio = async (audio: string, companyId: string, priority: number = 1): Promise<string> => {
@@ -897,9 +1078,6 @@ const processAudio = async (audio: string, companyId: string, priority: number =
     }
 
     console.log(`Iniciando processamento de áudio: ${path.basename(audio)} (${stats.size} bytes, prioridade ${priority})`);
-    
-    const poolStatus = audioPool.getStatus();
-    console.log(`Status do pool de áudio:`, poolStatus);
 
     const processedPath = await audioPool.processAudio(audio, outputAudio, priority);
 
@@ -932,8 +1110,8 @@ const processAudio = async (audio: string, companyId: string, priority: number =
   }
 };
 
-// Função inteligente de limpeza com retry
-const cleanupFile = (filePath: string, delay: number = 5000, maxRetries: number = 3) => {
+// Função inteligente de limpeza com retry (reduzida)
+const cleanupFile = (filePath: string, delay: number = 10000, maxRetries: number = 2) => {
   let retries = 0;
   
   const attemptCleanup = () => {
@@ -1017,7 +1195,6 @@ export const getMessageOptions = async (
             mimetype: "audio/mpeg",
             ptt: true
           };
-          // Não deletar imediatamente o arquivo convertido pois pode estar no cache
         } catch (readError) {
           cleanupFile(convert, 0);
           throw readError;
@@ -1058,7 +1235,7 @@ export const getMessageOptions = async (
   }
 };
 
-// Função principal ultra-otimizada
+// Função principal otimizada para FlowBuilder
 const SendWhatsAppMedia = async ({
   media,
   ticket,
@@ -1083,11 +1260,11 @@ const SendWhatsAppMedia = async ({
     const bodyMedia = ticket ? formatBody(body, ticket) : body;
 
     console.log(`[Ticket ${ticket.id}] Processando mídia: ${media.originalname} (${media.mimetype}, ${media.size} bytes)`);
-    
-    const audioStatus = audioPool.getStatus();
-    const mediaStatus = mediaPool.getStatus();
-    const cacheStats = monitor.getCacheStats();
-    console.log(`Status dos pools - Áudio: ${audioStatus.activeProcesses}/${audioStatus.maxProcesses} (fila: ${audioStatus.queueSize}), Mídia: ${mediaStatus.activeDownloads}/${mediaStatus.maxDownloads} (fila: ${mediaStatus.queueSize}), Cache Hit Rate: ${cacheStats.hitRate}`);
+
+    // Verificar se é arquivo do FlowBuilder/TypeBot
+    const isFlowBuilderFile = media.path.includes('flowbuilder') || 
+                             media.path.includes('typebot') || 
+                             media.path.includes('company' + companyId);
 
     // Processamento otimizado por tipo
     switch (typeMessage) {
@@ -1098,7 +1275,12 @@ const SendWhatsAppMedia = async ({
           throw new Error('Arquivo de vídeo não encontrado');
         }
 
-        const videoPath = await mediaPool.processMedia(pathMedia, media.size, 'video');
+        let videoPath;
+        if (isFlowBuilderFile) {
+          videoPath = await mediaPool.processFlowBuilderMedia(pathMedia, media.originalname, media.size, 'video');
+        } else {
+          videoPath = await mediaPool.processMedia(pathMedia, media.size, 'video');
+        }
         
         options = {
           video: fs.readFileSync(videoPath),
@@ -1113,12 +1295,25 @@ const SendWhatsAppMedia = async ({
       case "audio":
         console.log(`[Ticket ${ticket.id}] Processando áudio`);
         
-        const fileStats = fs.statSync(media.path);
-        const priority = getAudioPriority(fileStats.size);
-        
-        console.log(`[Ticket ${ticket.id}] Prioridade do áudio: ${priority} (${fileStats.size} bytes)`);
-        
-        convertedAudioPath = await processAudio(media.path, companyId, priority);
+        if (isFlowBuilderFile) {
+          // Para arquivos do FlowBuilder, tentar reutilizar primeiro
+          const cachedAudio = cacheManager.getCachedFlowBuilderFile(media.originalname, media.size, 'audio');
+          if (cachedAudio) {
+            convertedAudioPath = cachedAudio;
+            console.log(`[Ticket ${ticket.id}] Áudio reutilizado do cache: ${media.originalname}`);
+          } else {
+            const fileStats = fs.statSync(media.path);
+            const priority = getAudioPriority(fileStats.size);
+            convertedAudioPath = await processAudio(media.path, companyId, priority);
+            
+            // Adicionar ao cache
+            cacheManager.addFlowBuilderToCache(convertedAudioPath, 'audio', media.originalname);
+          }
+        } else {
+          const fileStats = fs.statSync(media.path);
+          const priority = getAudioPriority(fileStats.size);
+          convertedAudioPath = await processAudio(media.path, companyId, priority);
+        }
 
         options = {
           audio: fs.readFileSync(convertedAudioPath),
@@ -1133,7 +1328,13 @@ const SendWhatsAppMedia = async ({
 
       case "document":
       case "text":
-        const docPath = await mediaPool.processMedia(pathMedia, media.size, 'document');
+        let docPath;
+        if (isFlowBuilderFile) {
+          docPath = await mediaPool.processFlowBuilderMedia(pathMedia, media.originalname, media.size, 'document');
+        } else {
+          docPath = await mediaPool.processMedia(pathMedia, media.size, 'document');
+        }
+        
         options = {
           document: fs.readFileSync(docPath),
           caption: bodyMedia,
@@ -1145,7 +1346,13 @@ const SendWhatsAppMedia = async ({
         break;
 
       case "application":
-        const appPath = await mediaPool.processMedia(pathMedia, media.size, 'document');
+        let appPath;
+        if (isFlowBuilderFile) {
+          appPath = await mediaPool.processFlowBuilderMedia(pathMedia, media.originalname, media.size, 'document');
+        } else {
+          appPath = await mediaPool.processMedia(pathMedia, media.size, 'document');
+        }
+        
         options = {
           document: fs.readFileSync(appPath),
           caption: bodyMedia,
@@ -1163,7 +1370,12 @@ const SendWhatsAppMedia = async ({
           throw new Error('Arquivo de imagem não encontrado');
         }
 
-        const imagePath = await mediaPool.processMedia(pathMedia, media.size, 'image');
+        let imagePath;
+        if (isFlowBuilderFile) {
+          imagePath = await mediaPool.processFlowBuilderMedia(pathMedia, media.originalname, media.size, 'image');
+        } else {
+          imagePath = await mediaPool.processMedia(pathMedia, media.size, 'image');
+        }
         
         if (media.mimetype.includes("gif")) {
           options = {
@@ -1234,12 +1446,7 @@ const SendWhatsAppMedia = async ({
     });
 
     const totalTime = Date.now() - startTime;
-    console.log(`[Ticket ${ticket.id}] Mídia enviada com sucesso em ${totalTime}ms`);
-    
-    const finalAudioStatus = audioPool.getStatus();
-    const finalMediaStatus = mediaPool.getStatus();
-    const finalCacheStats = monitor.getCacheStats();
-    console.log(`Status final - Áudio: ${finalAudioStatus.activeProcesses}/${finalAudioStatus.maxProcesses}, Mídia: ${finalMediaStatus.activeDownloads}/${finalMediaStatus.maxDownloads}, Cache: ${finalCacheStats.hitRate}`);
+    console.log(`[Ticket ${ticket.id}] Mídia enviada com sucesso em ${totalTime}ms ${isFlowBuilderFile ? '(FlowBuilder)' : ''}`);
     
     monitor.recordProcessing('total_send', media.size, totalTime, true);
     

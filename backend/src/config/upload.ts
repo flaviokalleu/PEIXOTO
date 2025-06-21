@@ -46,5 +46,23 @@ export default {
       const fileName = typeArch && typeArch !== "announcements" ? file.originalname.replace('/', '-').replace(/ /g, "_") : new Date().getTime() + '_' + file.originalname.replace('/', '-').replace(/ /g, "_");
       return cb(null, fileName);
     }
-  })
+  }),
+  fileFilter: (req, file, cb) => {
+    console.log(`🔍 [Upload] Verificando arquivo: ${file.originalname}, MIME: ${file.mimetype}`);
+    
+    // Verificar extensão
+    const ext = path.extname(file.originalname).toLowerCase();
+    const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.mp4', '.mp3', '.wav', '.pdf', '.doc', '.docx'];
+    
+    if (!allowedExtensions.includes(ext)) {
+      console.error(`❌ [Upload] Extensão não permitida: ${ext}`);
+      return cb(new Error(`Extensão de arquivo não permitida: ${ext}`));
+    }
+    
+    console.log(`✅ [Upload] Arquivo aceito: ${file.originalname}`);
+    cb(null, true);
+  },
+  limits: {
+    fileSize: 20 * 1024 * 1024, // 20MB
+  }
 };
