@@ -1064,11 +1064,17 @@ const processAudio = async (audio: string, companyId: string, priority: number =
       throw new Error('Arquivo de áudio muito grande (máximo 50MB)');
     }
 
-    // Verificar formato de áudio suportado
+    // Verificar formato de áudio suportado (LISTA EXPANDIDA)
     const ext = path.extname(audio).toLowerCase();
-    const supportedFormats = ['.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.opus'];
+    const supportedFormats = [
+      '.mp3', '.wav', '.aac', '.ogg', '.m4a', '.webm', '.opus', 
+      '.mpeg', '.mpga', '.mp2', '.m2a', '.mpa', '.3gp', '.amr', 
+      '.flac', '.wma', '.ra', '.au', '.aiff'
+    ];
+    
     if (!supportedFormats.includes(ext)) {
-      throw new Error(`Formato de áudio não suportado: ${ext}`);
+      console.warn(`Formato não listado mas tentando processar: ${ext}`);
+      // Não bloqueia mais, apenas avisa
     }
 
     // Criar diretório se não existir
@@ -1464,6 +1470,47 @@ const SendWhatsAppMedia = async ({
     }
 
     throw new AppError("Erro ao enviar mídia. Tente novamente.", 500);
+  }
+};
+
+// Arquivo: SendWhatsAppMediaFlow.ts
+const sendMediaFile = async (fileName: string, mediaType: string) => {
+  try {
+    // Função helper para encontrar o arquivo correto
+    const findMediaFile = (baseName: string, type: string): string => {
+      const publicDir = '/home/deploy/zazap/backend/dist/public';
+      const extensions = {
+        video: ['mp4', 'avi', 'mov', 'mkv'],
+        audio: ['mp3', 'wav', 'mpeg', 'aac'],
+        image: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+        document: ['pdf', 'doc', 'docx', 'txt']
+      };
+      
+      // Remover extensão duplicada se existir
+      const cleanName = baseName.replace(/\.(mp4|jpg|png|gif|pdf|mp3|wav|mpeg|aac|avi|mov)$/, '');
+      
+      // Tentar encontrar o arquivo com diferentes extensões
+      const possibleExtensions = extensions[type] || ['mp4'];
+      
+      for (const ext of possibleExtensions) {
+        const fullPath = path.join(publicDir, `${cleanName}.${ext}`);
+        if (fs.existsSync(fullPath)) {
+          console.log(`✅ Arquivo encontrado: ${fullPath}`);
+          return fullPath;
+        }
+      }
+      
+      throw new Error(`Arquivo não encontrado: ${cleanName} (tipo: ${type})`);
+    };
+
+    const filePath = findMediaFile(fileName, mediaType);
+    const fileBuffer = fs.readFileSync(filePath);
+    
+    return fileBuffer;
+    
+  } catch (error) {
+    console.error(`❌ Erro ao ler arquivo de mídia:`, error);
+    throw new AppError("Arquivo de mídia não encontrado", 404);
   }
 };
 
