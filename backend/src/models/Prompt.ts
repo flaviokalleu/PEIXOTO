@@ -51,7 +51,7 @@ class Prompt extends Model<Prompt> {
   totalTokens: number;
 
   @AllowNull(false)
-  @Column
+  @Column({ defaultValue: "alloy" })
   voice: string;
 
   @AllowNull(true)
@@ -63,10 +63,10 @@ class Prompt extends Model<Prompt> {
   voiceRegion: string;
 
   @AllowNull(false)
-  @Column
-  model: string; // Added model as a STRING column
+  @Column({ defaultValue: "gpt-3.5-turbo" })
+  model: string;
 
-  @AllowNull
+  @AllowNull(true)
   @ForeignKey(() => Queue)
   @Column
   queueId: number;
