@@ -11,8 +11,8 @@ import makeWASocket, {
   isJidGroup,
   jidNormalizedUser,
   makeCacheableSignalKeyStore,
-  makeInMemoryStore,
 } from "@whiskeysockets/baileys";
+import makeInMemoryStore  from "@whiskeysockets/baileys";
 import { FindOptions } from "sequelize/types";
 import Whatsapp from "../models/Whatsapp";
 import logger from "../utils/logger";
@@ -161,10 +161,11 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         let retriesQrCode = 0;
 
         let wsocket: Session = null;
-        const store = makeInMemoryStore({
-          logger: loggerBaileys
-        });
         const { state, saveCreds } = await useMultiFileAuthState(whatsapp);
+        const store = makeInMemoryStore({
+          logger: loggerBaileys,
+          auth: state as AuthenticationState
+        });
 
         const { version } = await fetchLatestBaileysVersion();
         wsocket = makeWASocket({
