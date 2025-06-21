@@ -1,39 +1,49 @@
-const Wavoip = require("wavoip-api");
+import api from './api';
 
 class WavoipService {
-    constructor() {
-        this.wavoip = new Wavoip();
-        this.instance = null;
-    }
+  constructor() {
+    this.baseURL = process.env.REACT_APP_WAVOIP_URL || 'https://api.wavoip.com';
+  }
 
-    async connect() {
-        if (!this.instance) {
-            this.instance = this.wavoip.connect(process.env.REACT_APP_WAVOIP_TOKEN);
-            
-            this.instance.socket.on('connect', () => {
-                console.log('Wavoip connected successfully');
-            });
-
-            this.instance.socket.on('error', (error) => {
-                console.error('Wavoip connection error:', error);
-            });
-        }
-        return this.instance;
+  async makeCall(data) {
+    try {
+      const response = await api.post('/wavoip/call', data);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao fazer chamada WaVoIP:', error);
+      throw error;
     }
+  }
 
-    async initiateCall(phoneNumber) {
-        const instance = await this.connect();
-        return instance.callStart({
-            whatsappid: phoneNumber
-        });
+  async getCallStatus(callId) {
+    try {
+      const response = await api.get(`/wavoip/call/${callId}/status`);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao obter status da chamada:', error);
+      throw error;
     }
+  }
 
-    async endCall(callId) {
-        const instance = await this.connect();
-        return instance.callEnd({
-            callId: callId
-        });
+  async endCall(callId) {
+    try {
+      const response = await api.post(`/wavoip/call/${callId}/end`);
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao finalizar chamada:', error);
+      throw error;
     }
+  }
+
+  async getCallHistory() {
+    try {
+      const response = await api.get('/wavoip/calls/history');
+      return response.data;
+    } catch (error) {
+      console.error('Erro ao obter histórico de chamadas:', error);
+      throw error;
+    }
+  }
 }
 
 export default new WavoipService();

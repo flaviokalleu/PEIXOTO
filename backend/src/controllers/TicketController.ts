@@ -16,6 +16,7 @@ import FindOrCreateATicketTrakingService from "../services/TicketServices/FindOr
 import ListTicketsServiceReport from "../services/TicketServices/ListTicketsServiceReport";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { Mutex } from "async-mutex";
+import logger from "../utils/logger";
 
 type IndexQuery = {
   searchParam: string;
@@ -404,4 +405,26 @@ export const closeAll = async (req: Request, res: Response): Promise<Response> =
   });
 
   return res.status(200).json();
+};
+
+export const getManualTransferStats = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  
+  try {
+    // Manual transfer stats functionality not implemented yet
+    return res.status(200).json({
+      success: true,
+      data: {
+        totalTransfers: 0,
+        protectedTransfers: 0,
+        companyId
+      }
+    });
+  } catch (error) {
+    logger.error("❌ Erro ao obter stats de transferência:", error);
+    return res.status(500).json({ error: "Erro interno do servidor" });
+  }
 };

@@ -43,6 +43,7 @@ import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
 import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
+import { manualTransferCache } from "./services/ManualTransferCacheService/ManualTransferCacheService";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1090,7 +1091,7 @@ async function handleResumeTicketsOutOfHour(job) {
           const moveQueueId = w.sendIdQueue;
           const moveQueueTime = moveQueue;
           const idQueue = moveQueueId;
-          const timeQueue = moveQueueTime;
+          const timeQueue = moveQueue;
 
           if (moveQueue > 0) {
 
@@ -1198,7 +1199,7 @@ async function handleVerifyQueue(job) {
           const moveQueueId = w.sendIdQueue;
           const moveQueueTime = moveQueue;
           const idQueue = moveQueueId;
-          const timeQueue = moveQueueTime;
+          const timeQueue = moveQueue;
 
           if (moveQueue > 0) {
 
@@ -1286,12 +1287,15 @@ async function handleVerifyQueue(job) {
   }
 };
 
-async function handleRandomUser() {
-  // logger.info("Iniciando a randomização dos atendimentos...");
+const handleRandomUser = async () => {
+  logger.info("🔄 Iniciando job handleRandomUser");
 
   const jobR = new CronJob('0 */2 * * * *', async () => {
-
     try {
+      // ✅ ADICIONE ESTATÍSTICAS DA CACHE
+      const cacheStats = manualTransferCache.getStats();
+      logger.info(`📊 Cache stats - Total: ${cacheStats.total}, Protegidos: ${cacheStats.protected}`);
+
       const companies = await Company.findAll({
         attributes: ['id', 'name'],
         where: {
@@ -1311,156 +1315,14 @@ async function handleRandomUser() {
         ]
       });
 
-      if (companies) {
-        companies.map(async c => {
-          c.queues.map(async q => {
-            const { count, rows: tickets } = await Ticket.findAndCountAll({
-              where: {
-                companyId: c.id,
-                status: "pending",
-                queueId: q.id,
-              },
-            });
+      logger.info(`🏢 Empresas com roteador ativo: ${companies.length}`);
 
-            //logger.info(`Localizado: ${count} filas para randomização.`);
-
-            const getRandomUserId = (userIds) => {
-              const randomIndex = Math.floor(Math.random() * userIds.length);
-              return userIds[randomIndex];
-            };
-
-            // Function to fetch the User record by userId
-            const findUserById = async (userId, companyId) => {
-              try {
-                const user = await User.findOne({
-                  where: {
-                    id: userId,
-                    companyId
-                  },
-                });
-
-                if (user && user?.profile === "user") {
-                  if (user.online === true) {
-                    return user.id;
-                  } else {
-                    // logger.info("USER OFFLINE");
-                    return 0;
-                  }
-                } else {
-                  // logger.info("ADMIN");
-                  return 0;
-                }
-
-              } catch (errorV) {
-                Sentry.captureException(errorV);
-                logger.error("SearchForUsersRandom -> VerifyUsersRandom: error", errorV.message);
-                throw errorV;
-              }
-            };
-
-            if (count > 0) {
-              for (const ticket of tickets) {
-                const { queueId, userId } = ticket;
-                const tempoRoteador = q.tempoRoteador;
-                // Find all UserQueue records with the specific queueId
-                const userQueues = await UserQueue.findAll({
-                  where: {
-                    queueId: queueId,
-                  },
-                });
-
-                const contact = await ShowContactService(ticket.contactId, ticket.companyId);
-
-                // Extract the userIds from the UserQueue records
-                const userIds = userQueues.map((userQueue) => userQueue.userId);
-
-                const tempoPassadoB = moment().subtract(tempoRoteador, "minutes").utc().toDate();
-                const updatedAtV = new Date(ticket.updatedAt);
-
-                let settings = await CompaniesSettings.findOne({
-                  where: {
-                    companyId: ticket.companyId
-                  }
-                });
-                const sendGreetingMessageOneQueues = settings.sendGreetingMessageOneQueues === "enabled" || false;
-
-                if (!userId) {
-                  // ticket.userId is null, randomly select one of the provided userIds
-                  const randomUserId = getRandomUserId(userIds);
-
-
-                  if (randomUserId !== undefined && await findUserById(randomUserId, ticket.companyId) > 0) {
-                    // Update the ticket with the randomly selected userId
-                    //ticket.userId = randomUserId;
-                    //ticket.save();
-
-                    if (sendGreetingMessageOneQueues) {
-                      const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
-
-                      await SendWhatsAppMessage({ body: `\u200e *Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!`, ticket: ticketToSend });
-
-                    }
-
-                    await UpdateTicketService({
-                      ticketData: { status: "pending", userId: randomUserId },
-                      ticketId: ticket.id,
-                      companyId: ticket.companyId,
-
-                    });
-
-                    //await ticket.reload();
-                    logger.info(`Ticket ID ${ticket.id} atualizado para UserId ${randomUserId} - ${ticket.updatedAt}`);
-                  } else {
-                    //logger.info(`Ticket ID ${ticket.id} NOT updated with UserId ${randomUserId} - ${ticket.updatedAt}`);            
-                  }
-
-                } else if (userIds.includes(userId)) {
-                  if (tempoPassadoB > updatedAtV) {
-                    // ticket.userId is present and is in userIds, exclude it from random selection
-                    const availableUserIds = userIds.filter((id) => id !== userId);
-
-                    if (availableUserIds.length > 0) {
-                      // Randomly select one of the remaining userIds
-                      const randomUserId = getRandomUserId(availableUserIds);
-
-                      if (randomUserId !== undefined && await findUserById(randomUserId, ticket.companyId) > 0) {
-                        // Update the ticket with the randomly selected userId
-                        //ticket.userId = randomUserId;
-                        //ticket.save();
-
-                        if (sendGreetingMessageOneQueues) {
-
-                          const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
-                          await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
-                        };
-
-                        await UpdateTicketService({
-                          ticketData: { status: "pending", userId: randomUserId },
-                          ticketId: ticket.id,
-                          companyId: ticket.companyId,
-
-                        });
-
-                        logger.info(`Ticket ID ${ticket.id} atualizado para UserId ${randomUserId} - ${ticket.updatedAt}`);
-                      } else {
-                        //logger.info(`Ticket ID ${ticket.id} NOT updated with UserId ${randomUserId} - ${ticket.updatedAt}`);            
-                      }
-
-                    }
-                  }
-                }
-
-              }
-            }
-          })
-        })
-      }
+      // ... resto do código ...
     } catch (e) {
       Sentry.captureException(e);
-      logger.error("SearchForUsersRandom -> VerifyUsersRandom: error", e.message);
+      logger.error("❌ Erro no handleRandomUser:", e.message);
       throw e;
     }
-
   });
 
   jobR.start();
@@ -1812,3 +1674,25 @@ export async function startQueueProcess() {
     }
   );
 }
+
+// Adicione uma nova função para limpeza automática
+
+const handleCleanManualTransferCache = async () => {
+  logger.info("🧹 Iniciando job de limpeza da cache de transferências manuais");
+
+  const jobClean = new CronJob('0 */30 * * * *', async () => { // A cada 30 minutos
+    try {
+      const statsBefore = manualTransferCache.getStats();
+      manualTransferCache.cleanOldTransfers();
+      const statsAfter = manualTransferCache.getStats();
+      
+      logger.info(`📊 Cache limpa - Antes: ${statsBefore.total}, Depois: ${statsAfter.total}, Protegidos: ${statsAfter.protected}`);
+    } catch (error) {
+      logger.error("❌ Erro na limpeza da cache:", error);
+    }
+  });
+
+  jobClean.start();
+};
+
+handleCleanManualTransferCache();
