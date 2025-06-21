@@ -8,7 +8,7 @@ import Ticket from "../../models/Ticket";
 import { Op } from "sequelize";
 import { add } from "date-fns";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
-import { dataMessages, getWbot } from "../../libs/wbot";
+import dataMessages, { getWbot } from "../../libs/wbot";
 import { handleMessage } from "../WbotServices/wbotMessageListener";
 import fs from 'fs';
 import moment from "moment";

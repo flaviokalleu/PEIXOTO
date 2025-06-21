@@ -57,7 +57,7 @@ import MarkDeleteWhatsAppMessage from "./MarkDeleteWhatsAppMessage";
 import ListUserQueueServices from "../UserQueueServices/ListUserQueueServices";
 import cacheLayer from "../../libs/cache";
 import { addLogs } from "../../helpers/addLogs";
-import { SendWhatsAppMedia, getMessageOptions } from "./SendWhatsAppMedia";
+import SendWhatsAppMedia, { getMessageOptions } from "./SendWhatsAppMedia";
 
 import ShowQueueIntegrationService from "../QueueIntegrationServices/ShowQueueIntegrationService";
 import { createDialogflowSessionWithModel } from "../QueueIntegrationServices/CreateSessionDialogflow";
