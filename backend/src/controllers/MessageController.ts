@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 import fs from "fs";
+import mime from "mime-types";
 import GetTicketWbot from "../helpers/GetTicketWbot";
 import SetTicketMessagesAsRead from "../helpers/SetTicketMessagesAsRead";
 import { getIO } from "../libs/socket";
@@ -1057,5 +1058,70 @@ export const sendMessageFlow = async (
       throw err;
     }
     throw new AppError("Não foi possível enviar a mensagem, tente novamente em alguns instantes", 500);
+  }
+};
+
+// Servir arquivos de mídia com autenticação
+export const serveMedia = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { companyId, filename } = req.params;
+    const { companyId: userCompanyId } = req.user;
+
+    console.log(`Servindo mídia: company${companyId}/${filename} para usuário da empresa ${userCompanyId}`);
+
+    // Verificar se o usuário tem acesso à empresa
+    if (parseInt(companyId) !== userCompanyId) {
+      console.error(`Acesso negado: usuário da empresa ${userCompanyId} tentando acessar mídia da empresa ${companyId}`);
+      throw new AppError("Acesso negado", 403);
+    }
+
+    const filePath = path.resolve(__dirname, "..", "..", "public", `company${companyId}`, filename);
+    
+    console.log(`Caminho do arquivo: ${filePath}`);
+
+    // Verificar se o arquivo existe
+    if (!fs.existsSync(filePath)) {
+      console.error(`Arquivo não encontrado: ${filePath}`);
+      throw new AppError("Arquivo não encontrado", 404);
+    }
+
+    // Obter informações do arquivo
+    const stat = fs.statSync(filePath);
+    const fileSize = stat.size;
+    const mimeType = mime.lookup(filePath) || 'application/octet-stream';
+
+    console.log(`Arquivo encontrado: ${filename}, tipo: ${mimeType}, tamanho: ${fileSize} bytes`);
+
+    // Configurar headers para cache
+    res.set({
+      'Content-Type': mimeType,
+      'Content-Length': fileSize.toString(),
+      'Cache-Control': 'public, max-age=31536000', // 1 ano
+      'Last-Modified': stat.mtime.toUTCString(),
+    });
+
+    // Verificar se o cliente já tem o arquivo em cache
+    const ifModifiedSince = req.headers['if-modified-since'];
+    if (ifModifiedSince && new Date(ifModifiedSince) >= stat.mtime) {
+      console.log(`Arquivo em cache: ${filename}`);
+      res.status(304).end();
+      return;
+    }
+
+    // Enviar arquivo
+    console.log(`Enviando arquivo: ${filename}`);
+    const stream = fs.createReadStream(filePath);
+    stream.on('error', (error) => {
+      console.error(`Erro ao ler arquivo ${filename}:`, error);
+      res.status(500).json({ error: "Erro ao ler arquivo" });
+    });
+    stream.pipe(res);
+  } catch (err) {
+    console.error("Erro ao servir mídia:", err);
+    if (err instanceof AppError) {
+      res.status(err.statusCode).json({ error: err.message });
+    } else {
+      res.status(500).json({ error: "Erro interno do servidor" });
+    }
   }
 };

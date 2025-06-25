@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { makeStyles } from "@material-ui/core/styles";
+import axios from "axios";
 
 import ModalImage from "react-modal-image";
 import api from "../../services/api";
@@ -24,14 +25,51 @@ const ModalImageCors = ({ imageUrl }) => {
 	useEffect(() => {
 		if (!imageUrl) return;
 		const fetchImage = async () => {
-			const { data, headers } = await api.get(imageUrl, {
-				responseType: "blob",
-			});
-			const url = window.URL.createObjectURL(
-				new Blob([data], { type: headers["content-type"] })
-			);
-			setBlobUrl(url);
-			setFetching(false);
+			try {
+				// Verificar se é uma URL completa ou relativa
+				let apiUrl = imageUrl;
+				
+				// Se for URL completa (inclui protocolo), extrair apenas a parte da rota
+				if (imageUrl.startsWith('http')) {
+					const urlObj = new URL(imageUrl);
+					apiUrl = urlObj.pathname; // Pega apenas o path, ex: /media/1/filename.jpg
+				}
+				
+				console.log("Carregando imagem via API:", apiUrl);
+				
+				const response = await api.get(apiUrl, {
+					responseType: "blob",
+				});
+				
+				const blobUrl = window.URL.createObjectURL(
+					new Blob([response.data], { type: response.headers["content-type"] })
+				);
+				setBlobUrl(blobUrl);
+				setFetching(false);
+			} catch (error) {
+				console.error("Erro ao carregar imagem:", error);
+				
+				// Fallback: para mensagens antigas com URLs públicas
+				if (imageUrl.includes('/public/')) {
+					try {
+						const response = await axios.get(imageUrl, {
+							responseType: "blob",
+						});
+						const blobUrl = window.URL.createObjectURL(
+							new Blob([response.data], { type: response.headers["content-type"] })
+						);
+						setBlobUrl(blobUrl);
+						setFetching(false);
+					} catch (fallbackError) {
+						console.error("Fallback também falhou:", fallbackError);
+						setBlobUrl(imageUrl);
+						setFetching(false);
+					}
+				} else {
+					setBlobUrl(imageUrl);
+					setFetching(false);
+				}
+			}
 		};
 		fetchImage();
 	}, [imageUrl]);

@@ -623,7 +623,6 @@ const hanldeReplyMessage = (e, message) => {
 };
 
 const checkMessageMedia = (message) => {
-  console.log(message)
   if (message.mediaType === "eventMessage") {
     try {
       // Parsear o dataJson diretamente da coluna do banco de dados
@@ -828,7 +827,6 @@ const checkMessageMedia = (message) => {
       return <VcardPreview contact={contact} numbers={obj[0]?.number} queueId={message?.ticket?.queueId} whatsappId={message?.ticket?.whatsappId} />
     } 
     else if (message.mediaType === "adMetaPreview") { // Adicionado para renderizar o componente de preview de anúncio
-      console.log("Entrou no MetaPreview");
       let [image, sourceUrl, title, body, messageUser] = message.body.split('|');
       return <AdMetaPreview image={image} sourceUrl={sourceUrl} title={title} body={body} messageUser={messageUser} />;
   }
@@ -1220,7 +1218,7 @@ const renderMessages = () => {
                 {message.quotedMsg && renderQuotedMessage(message)}
                 {
                   (
-                    (message.mediaUrl !== null && (message.mediaType === "image" || message.mediaType === "video") && path.basename(message.mediaUrl).trim() !== message.body.trim()) ||
+                    (message.mediaUrl !== null && (message.mediaType === "image" || message.mediaType === "video") && (path.basename(message.mediaUrl).trim() !== message.body.trim() && message.body.trim() !== "🖼️ Imagem" && message.body.trim() !== "🎥 Vídeo")) ||
                     message.mediaType !== "audio" &&
                     message.mediaType !== "image" &&
                     message.mediaType !== "video" &&
@@ -1326,7 +1324,7 @@ const renderMessages = () => {
                 {message.quotedMsg && renderQuotedMessage(message)}
 
                 {
-                  ((message.mediaType === "image" || message.mediaType === "video") && path.basename(message.mediaUrl) === message.body) ||
+                  ((message.mediaType === "image" || message.mediaType === "video") && (path.basename(message.mediaUrl) === message.body || message.body === "🖼️ Imagem" || message.body === "🎥 Vídeo")) ||
                   (message.mediaType !== "audio" && message.mediaType != "reactionMessage" && message.mediaType != "locationMessage" && message.mediaType !== "contactMessage" && message.mediaType != "pollCreationMessageV3" && message.mediaType != "eventMessage" &&
                     message.mediaType != "listMessage" &&
                     message.mediaType != "viewOnceMessage" &&

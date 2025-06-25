@@ -27,4 +27,7 @@ messageRoutes.post("/messages/PIX/:ticketId", isAuth, MessageController.sendPIXM
 messageRoutes.post('/message/forward', isAuth, MessageController.forwardMessage)
 messageRoutes.post('/messages/:messageId/reactions', isAuth, MessageController.addReaction);
 
+// Rota para servir arquivos de mídia com autenticação
+messageRoutes.get('/media/:companyId/:filename', isAuth, MessageController.serveMedia);
+
 export default messageRoutes;

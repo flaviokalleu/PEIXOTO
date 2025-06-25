@@ -1266,6 +1266,9 @@ const SendWhatsAppMedia = async ({
     const bodyMedia = ticket ? formatBody(body, ticket) : body;
 
     console.log(`[Ticket ${ticket.id}] Processando mídia: ${media.originalname} (${media.mimetype}, ${media.size} bytes)`);
+    console.log(`[Ticket ${ticket.id}] Arquivo temporário: ${media.path}`);
+    console.log(`[Ticket ${ticket.id}] Nome do arquivo: ${media.filename}`);
+    console.log(`[Ticket ${ticket.id}] É mensagem privada: ${isPrivate}`);
 
     // Verificar se é arquivo do FlowBuilder/TypeBot
     const isFlowBuilderFile = media.path.includes('flowbuilder') || 
@@ -1404,6 +1407,22 @@ const SendWhatsAppMedia = async ({
 
     // Processamento de mensagem privada
     if (isPrivate === true) {
+      // Para mensagens privadas, garantir que o arquivo seja salvo no local correto
+      const companyDir = path.join(publicFolder, `company${companyId}`);
+      
+      // Criar diretório da empresa se não existir
+      if (!fs.existsSync(companyDir)) {
+        fs.mkdirSync(companyDir, { recursive: true });
+      }
+      
+      const finalPath = path.join(companyDir, media.filename);
+      
+      // Copiar arquivo do local temporário para o local final se necessário
+      if (media.path !== finalPath && fs.existsSync(media.path)) {
+        fs.copyFileSync(media.path, finalPath);
+        console.log(`[Ticket ${ticket.id}] Arquivo copiado para: ${finalPath}`);
+      }
+
       const messageData = {
         wid: `PVT${companyId}${ticket.id}${Date.now()}`,
         ticketId: ticket.id,
@@ -1419,10 +1438,21 @@ const SendWhatsAppMedia = async ({
         participant: null,
         dataJson: null,
         ticketTrakingId: null,
-        isPrivate
+        isPrivate,
+        companyId: ticket.companyId
       };
 
       await CreateMessageService({ messageData, companyId: ticket.companyId });
+
+      // Limpar arquivo temporário se foi copiado
+      if (media.path !== finalPath && fs.existsSync(media.path)) {
+        try {
+          fs.unlinkSync(media.path);
+          console.log(`[Ticket ${ticket.id}] Arquivo temporário removido: ${media.path}`);
+        } catch (error) {
+          console.warn(`[Ticket ${ticket.id}] Erro ao remover arquivo temporário:`, error);
+        }
+      }
 
       const totalTime = Date.now() - startTime;
       console.log(`[Ticket ${ticket.id}] Mensagem privada processada em ${totalTime}ms`);
