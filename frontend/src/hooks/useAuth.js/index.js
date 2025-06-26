@@ -39,21 +39,41 @@ const useAuth = () => {
     },
     async (error) => {
       const originalRequest = error.config;
+      
+      // Se for erro 403 (token expirado), tentar renovar
       if (error?.response?.status === 403 && !originalRequest._retry) {
         originalRequest._retry = true;
-
-        const { data } = await api.post("/auth/refresh_token");
-        if (data) {
-          localStorage.setItem("token", JSON.stringify(data.token));
-          api.defaults.headers.Authorization = `Bearer ${data.token}`;
+        
+        try {
+          console.log("Token expirado, tentando renovar...");
+          const { data } = await api.post("/auth/refresh_token");
+          if (data && data.token) {
+            localStorage.setItem("token", JSON.stringify(data.token));
+            api.defaults.headers.Authorization = `Bearer ${data.token}`;
+            console.log("Token renovado com sucesso");
+            return api(originalRequest);
+          }
+        } catch (refreshError) {
+          console.error("Erro ao renovar token:", refreshError);
+          // Se falhar ao renovar, deslogar
+          localStorage.removeItem("token");
+          api.defaults.headers.Authorization = undefined;
+          setIsAuth(false);
+          setUser({});
+          history.push("/login");
         }
-        return api(originalRequest);
       }
-      if (error?.response?.status === 401) {
+      
+      // Se for erro 401 (não autorizado), deslogar apenas se não for uma tentativa de renovação
+      if (error?.response?.status === 401 && !originalRequest.url?.includes('/auth/refresh_token')) {
+        console.log("Token inválido, realizando logout...");
         localStorage.removeItem("token");
         api.defaults.headers.Authorization = undefined;
         setIsAuth(false);
+        setUser({});
+        history.push("/login");
       }
+      
       return Promise.reject(error);
     }
   );
@@ -68,12 +88,47 @@ const useAuth = () => {
           setIsAuth(true);
           setUser(data.user);
         } catch (err) {
+          console.error("Erro ao verificar token:", err);
+          localStorage.removeItem("token");
+          api.defaults.headers.Authorization = undefined;
+          setIsAuth(false);
           toastError(err);
         }
       }
       setLoading(false);
     })();
   }, []);
+
+  // Verificar sessão quando a aba ganha foco novamente
+  useEffect(() => {
+    if (isAuth) {
+      const handleVisibilityChange = async () => {
+        if (!document.hidden) {
+          // Aba ganhou foco novamente, verificar se a sessão ainda é válida
+          try {
+            const token = localStorage.getItem("token");
+            if (token) {
+              await api.get("/auth/me");
+              console.log("Sessão verificada após foco da aba");
+            }
+          } catch (error) {
+            console.error("Erro ao verificar sessão após foco:", error);
+            if (error?.response?.status === 401 || error?.response?.status === 403) {
+              console.log("Sessão inválida detectada após foco, realizando logout");
+              localStorage.removeItem("token");
+              api.defaults.headers.Authorization = undefined;
+              setIsAuth(false);
+              setUser({});
+              history.push("/login");
+            }
+          }
+        }
+      };
+
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+      return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    }
+  }, [isAuth, history]);
 
   useEffect(() => {
     if (Object.keys(user).length && user.id > 0) {
@@ -99,6 +154,33 @@ const useAuth = () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }
   }, [user]);
+
+  // Heartbeat para manter conexão ativa
+  useEffect(() => {
+    if (isAuth && user.id) {
+      const heartbeatInterval = setInterval(async () => {
+        // Só fazer heartbeat se a aba estiver visível
+        if (!document.hidden) {
+          try {
+            const token = localStorage.getItem("token");
+            if (token) {
+              // Fazer uma chamada simples e silenciosa
+              await api.get("/auth/me");
+              console.log("Heartbeat: Sessão mantida ativa");
+            }
+          } catch (error) {
+            console.error("Heartbeat: Erro ao verificar sessão:", error);
+            // Não fazer logout imediatamente no heartbeat, deixar o interceptor lidar
+            if (error?.response?.status === 401) {
+              console.log("Heartbeat: Sessão expirada, será tratada pelo interceptor");
+            }
+          }
+        }
+      }, 5 * 60 * 1000); // Verificar a cada 5 minutos
+
+      return () => clearInterval(heartbeatInterval);
+    }
+  }, [isAuth, user.id]);
 
   const handleLogin = async (userData) => {
     setLoading(true);
