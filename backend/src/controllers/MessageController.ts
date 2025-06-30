@@ -63,15 +63,16 @@ type MessageData = {
   vCard?: Contact;
 };
 
-// Função utilitária para extrair o campo body de mensagens
+// LOG para depuração de mensagens recebidas
 const extractMessageBody = (msg: any, fallback: string = "Mensagem interativa"): string => {
+  console.log("[extractMessageBody] msg:", JSON.stringify(msg));
   if (msg.message?.interactiveMessage?.body?.text) {
     return msg.message.interactiveMessage.body.text;
   }
   if (msg.message?.listMessage?.description) {
     return msg.message.listMessage.description;
   }
-  if (msg.message?.interactiveMessage?.nativeFlowMessage?.buttons[0]?.buttonParamsJson) {
+  if (msg.message?.interactiveMessage?.nativeFlowMessage?.buttons?.[0]?.buttonParamsJson) {
     try {
       const params = JSON.parse(msg.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
       return params.order?.items[0]?.name || params.display_text || fallback;
@@ -95,6 +96,9 @@ const generateRandomCode = (length: number = 11): string => {
 
 // Adicionar reação
 export const addReaction = async (req: Request, res: Response): Promise<Response> => {
+  console.log("[addReaction] req.body:", req.body);
+// LOG na listagem de mensagens
+// OBS: Função duplicada removida para evitar erro de declaração duplicada.
   try {
     const { messageId } = req.params;
     const { type } = req.body;

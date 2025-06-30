@@ -511,14 +511,13 @@ const MessagesList = ({
           const { data } = await api.get("/messages/" + ticketId, {
             params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
           });
-
+          console.log("[MessagesList] Mensagens recebidas:", data.messages);
           if (currentTicketId.current === ticketId) {
             dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
             setHasMore(data.hasMore);
             setLoading(false);
             setLoadingMore(false);
           }
-
           if (pageNumber === 1 && data.messages.length > 1) {
             scrollToBottom();
           }
@@ -528,7 +527,6 @@ const MessagesList = ({
           setLoadingMore(false);
         }
       };
-
       fetchMessages();
     }, 500);
     return () => {

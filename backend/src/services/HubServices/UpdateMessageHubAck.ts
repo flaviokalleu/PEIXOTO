@@ -12,6 +12,6 @@ export const UpdateMessageAck = async (messageId: string): Promise<void> => {
   }
 
   await message.update({
-    ack: 3
+    ack: 2
   });
 };

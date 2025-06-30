@@ -4,44 +4,49 @@ import Ticket from "../../models/Ticket";
 import User from "../../models/User";
 import Whatsapp from "../../models/Whatsapp";
 import ShowContactService from "../ContactServices/ShowContactService";
+import { getIO } from "../../libs/socket";
 
 interface Request {
   contactId: number;
   status: string;
   userId: number;
+  companyId: number;
   queueId?: number;
   channel: string;
-  companyId: number;
 }
 
 const CreateTicketService = async ({
   contactId,
   status,
   userId,
+  companyId,
   queueId,
-  channel,
-  companyId
+  channel
 }: Request): Promise<Ticket> => {
+
   let connectionType;
 
-  if (channel === 'instagram' || channel === 'facebook') {
-    connectionType = 'facebook';
-  }
-
-  console.log('channel', channel);
-  console.log('connectionType', connectionType);
+if (channel === 'instagram') {
+  connectionType = 'instagram';
+} else if (channel === 'facebook') {
+  connectionType = 'facebook';
+}
 
   const connection = await Whatsapp.findOne({
-    where: { type: connectionType },
-    attributes: ['id', 'companyId']
+    where: { type: connectionType! }
   });
 
   if (!connection) {
     throw new Error("Connection id not found");
   }
 
-  await CheckContactOpenTickets(contactId, connection.id, companyId);
+  // Verificação do companyId recebido
+  console.log("companyId recebido:", companyId);
 
+
+  await CheckContactOpenTickets(contactId, String(connection.id), companyId);
+
+  // Obtendo as informações do contato com base no companyId do usuário
   const { isGroup } = await ShowContactService(contactId, companyId);
 
   if (queueId === undefined) {
@@ -49,13 +54,15 @@ const CreateTicketService = async ({
     queueId = user?.queues.length === 1 ? user.queues[0].id : undefined;
   }
 
+  // Criando um novo ticket com o companyId associado
   const newTicket = await Ticket.create({
     status,
-    lastMessage: null,
+    //lastMessage: null,
+    lastMessage: null,  // Adicionando a última mensagem
     contactId,
     isGroup,
     whatsappId: connection.id,
-    companyId
+    companyId  // Passando o companyId para garantir que o ticket pertença à empresa do usuário
   });
 
   const ticket = await Ticket.findByPk(newTicket.id, { include: ["contact"] });
@@ -63,6 +70,8 @@ const CreateTicketService = async ({
   if (!ticket) {
     throw new AppError("ERR_CREATING_TICKET");
   }
+
+  const io = getIO();
 
   return ticket;
 };

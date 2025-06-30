@@ -12,10 +12,12 @@ type Params = {
   data:string
 };
 
+
 const UpdateCompanySettingsService = async ({companyId, column, data}:Params): Promise<any> => {
-
-  const [results, metadata] = await sequelize.query(`UPDATE "CompaniesSettings" SET "${column}"='${data}' WHERE "companyId"=${companyId}`)
-
+  if (!column || column === 'undefined') {
+    throw new Error('O parâmetro "column" está indefinido ou inválido ao atualizar CompaniesSettings.');
+  }
+  const [results, metadata] = await sequelize.query(`UPDATE "CompaniesSettings" SET "${column}"='${data}' WHERE "companyId"=${companyId}`);
   return results;
 };
 

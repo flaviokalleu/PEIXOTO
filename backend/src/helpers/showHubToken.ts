@@ -1,17 +1,18 @@
-import Setting from "../models/Setting";
+import CompaniesSettings from "../models/CompaniesSettings";
+import logger from "../utils/logger";
 
-export const showHubToken = async (): Promise<string | any> => {
-  const notificameHubToken = await Setting.findOne({
-    where: {
-      key: "hubToken"
+export const showHubToken = async (companyId: number): Promise<string | null> => {
+  try {
+    const companySettings = await CompaniesSettings.findOne({
+      where: { companyId }
+    });
+    if (!companySettings || !companySettings.hubToken) {
+      logger.warn(`hubToken não encontrado em CompaniesSettings para a empresa ${companyId}`);
+      return null;
     }
-  });
-
-  if (!notificameHubToken) {
-    throw new Error("Erro: Token do Notificame Hub não encontrado.");
-  }
-
-  if(notificameHubToken) {
-    return notificameHubToken.value;
+    return companySettings.hubToken;
+  } catch (err) {
+    logger.error(`Erro ao buscar hubToken em CompaniesSettings: ${err.message}`);
+    return null;
   }
 };

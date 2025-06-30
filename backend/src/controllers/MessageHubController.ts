@@ -1,11 +1,13 @@
 import { Request, Response } from "express";
+import User from "../models/User";
+import { getIO } from "../libs/socket";
 import Contact from "../models/Contact";
 import Ticket from "../models/Ticket";
-import { SendTextMessageService } from "../services/HubServices/SendTextMessageHubService";
 import Whatsapp from "../models/Whatsapp";
 import { SendMediaMessageService } from "../services/HubServices/SendMediaMessageHubService";
+import { SendTextMessageService } from "../services/HubServices/SendTextMessageHubService";
 import CreateHubTicketService from "../services/HubServices/CreateHubTicketService";
-import { getIO } from "../libs/socket";
+
 
 interface TicketData {
   contactId: number;
@@ -17,13 +19,19 @@ interface TicketData {
 }
 
 export const send = async (req: Request, res: Response): Promise<Response> => {
+
+  const { companyId } = req.user;
+
+  console.log('CompanyId do usuário autenticado:', companyId);  // Verifique se companyId está correto aqui
+  
   const { body: message } = req.body;
   const { ticketId } = req.params;
   const medias = req.files as Express.Multer.File[];
 
   console.log("sending hub message controller");
 
-  const ticket = await Ticket.findByPk(ticketId, {
+  const ticket = await Ticket.findOne({
+    where: { id: ticketId, companyId }, // Filtro pelo companyId
     include: [
       {
         model: Contact,
@@ -33,7 +41,7 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["qrcode", "type"]
+        attributes: ["qrcode", "type", "companyId"]
       }
     ]
   });
@@ -51,7 +59,8 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
             message,
             ticket.id,
             ticket.contact,
-            ticket.whatsapp
+            ticket.whatsapp,
+            companyId
           );
         })
       );
@@ -60,7 +69,8 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
         message,
         ticket.id,
         ticket.contact,
-        ticket.whatsapp
+        ticket.whatsapp,
+        companyId
       );
     }
 
@@ -73,16 +83,16 @@ export const send = async (req: Request, res: Response): Promise<Response> => {
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { contactId, status, userId, queueId, channel }: TicketData = req.body;
-  const { companyId } = req.user;
+  const { contactId, status, userId, channel }: TicketData = req.body;
 
-  const ticket = await CreateHubTicketService({ 
-    contactId, 
-    status, 
-    userId, 
-    queueId, 
-    channel, 
-    companyId 
+  const { companyId } = req.user;  // Obtendo o companyId do usuário autenticado
+
+  const ticket = await CreateHubTicketService({
+    contactId,
+    status,
+    userId,
+    channel,
+    companyId  // Passando o companyId na criação do ticket
   });
 
   const io = getIO();

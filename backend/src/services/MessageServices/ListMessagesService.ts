@@ -51,6 +51,14 @@ const ListMessagesService = async ({
     }
   });
 
+  // Permitir tickets do canal "hub" além do whatsapp
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  // Se o ticket for do canal hub, não filtrar por whatsappId
+  const isHubChannel = ticket.channel === "hub";
+
   const ticketsFilter: any[] | null = [];
 
   const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
@@ -58,30 +66,28 @@ const ListMessagesService = async ({
   let ticketIds = [];
   if (!isAllHistoricEnabled) {
     ticketIds = await Ticket.findAll({
-      where:
-      {
+      where: {
         id: { [Op.lte]: ticket.id },
         companyId: ticket.companyId,
         contactId: ticket.contactId,
-        whatsappId: ticket.whatsappId,
+        ...(isHubChannel ? {} : { whatsappId: ticket.whatsappId }),
         isGroup: ticket.isGroup,
-        queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup) ?
-          {
-            [Op.or]: [queues, null]
-          } :
-          { [Op.in]: queues },
+        queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup)
+          ? { [Op.or]: [queues, null] }
+          : { [Op.in]: queues },
+        channel: ticket.channel // garante que só pega tickets do mesmo canal
       },
       attributes: ["id"]
     });
   } else {
     ticketIds = await Ticket.findAll({
-      where:
-      {
+      where: {
         id: { [Op.lte]: ticket.id },
         companyId: ticket.companyId,
         contactId: ticket.contactId,
-        whatsappId: ticket.whatsappId,
-        isGroup: ticket.isGroup
+        ...(isHubChannel ? {} : { whatsappId: ticket.whatsappId }),
+        isGroup: ticket.isGroup,
+        channel: ticket.channel
       },
       attributes: ["id"]
     });
