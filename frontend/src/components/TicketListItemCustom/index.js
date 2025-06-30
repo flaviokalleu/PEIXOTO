@@ -555,7 +555,17 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                     <br />
                                 )}
                                 <span className={classes.secondaryContentSecond} >
-                                    {ticket?.whatsapp ? <Badge className={classes.connectionTag} style={{ backgroundColor: ticket.channel === "whatsapp" ? "#25D366" : ticket.channel === "facebook" ? "#4267B2" : "#E1306C" }}>{ticket.whatsapp?.name.toUpperCase()}</Badge> : <br></br>}
+                                    {ticket.channel === "whatsapp" && ticket?.whatsapp ? (
+                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#25D366" }}>{ticket.whatsapp?.name?.toUpperCase()}</Badge>
+                                    ) : ticket.channel === "hub" && ticket?.hub ? (
+                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#007bff" }}>{ticket.hub?.name?.toUpperCase() || "HUB"}</Badge>
+                                    ) : ticket.channel === "facebook" && ticket?.facebook ? (
+                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#4267B2" }}>{ticket.facebook?.name?.toUpperCase()}</Badge>
+                                    ) : ticket.channel === "instagram" && ticket?.instagram ? (
+                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#E1306C" }}>{ticket.instagram?.name?.toUpperCase()}</Badge>
+                                    ) : (
+                                      <br />
+                                    )}
                                     {<Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>{ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}</Badge>}
                                     {ticket?.user && (<Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>{ticket.user?.name.toUpperCase()}</Badge>)}
                                 </span>

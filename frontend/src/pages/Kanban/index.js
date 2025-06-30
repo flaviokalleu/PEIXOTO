@@ -151,8 +151,11 @@ const Kanban = () => {
             <div className="flex items-center space-x-2" key={`title-${ticket.id}`}>
               <div className="relative group">
                 {IconChannel(ticket.channel)}
-                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900  text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                  {ticket.whatsapp?.name}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                  {ticket.channel === "whatsapp" && ticket.whatsapp?.name}
+                  {ticket.channel === "hub" && ticket.hub?.name}
+                  {ticket.channel === "facebook" && ticket.facebook?.name}
+                  {ticket.channel === "instagram" && ticket.instagram?.name}
                 </div>
               </div>
               <span className="font-medium text-gray-800">{ticket.contact.name}</span>
@@ -205,13 +208,16 @@ const Kanban = () => {
             ),
             title: (
               <div className="flex items-center space-x-2" key={`title-tag-${ticket.id}`}>
-                <div className="relative group">
-                  {IconChannel(ticket.channel)}
-                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900  text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                    {ticket.whatsapp?.name}
-                  </div>
+              <div className="relative group">
+                {IconChannel(ticket.channel)}
+                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                  {ticket.channel === "whatsapp" && ticket.whatsapp?.name}
+                  {ticket.channel === "hub" && ticket.hub?.name}
+                  {ticket.channel === "facebook" && ticket.facebook?.name}
+                  {ticket.channel === "instagram" && ticket.instagram?.name}
                 </div>
-                <span className="font-medium ">{ticket.contact.name}</span>
+              </div>
+              <span className="font-medium ">{ticket.contact.name}</span>
               </div>
             ),
             draggable: true,

@@ -38,8 +38,8 @@ const FindOrCreateTicketService = async (
   // let isCreated = false;
 
   let openAsLGPD = false
-  if (settings.enableLGPD) { //adicionar lgpdMessage
-
+  // Corrige erro para quando settings está undefined (ex: tickets do hub)
+  if (settings && settings.enableLGPD) { //adicionar lgpdMessage
     openAsLGPD = !isCampaign &&
       !isTransfered &&
       settings.enableLGPD === "enabled" &&
@@ -47,6 +47,9 @@ const FindOrCreateTicketService = async (
       (settings.lgpdConsent === "enabled" ||
         (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)))
   }
+
+  // Garante que settings existe para evitar erro em outros pontos
+  settings = settings || {};
 
   const io = getIO();
 

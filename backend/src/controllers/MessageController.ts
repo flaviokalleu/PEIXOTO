@@ -645,8 +645,13 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     user: user!,
   });
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
-    await SetTicketMessagesAsRead(ticket);
+  // Só tenta marcar como lido se for whatsapp e a sessão estiver ativa
+  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.whatsapp?.status === "CONNECTED") {
+    try {
+      await SetTicketMessagesAsRead(ticket);
+    } catch (err) {
+      console.warn("[WARN] Não foi possível marcar como lida. Sessão WhatsApp desconectada ou não inicializada.");
+    }
   }
 
   return res.json({ count, messages, ticket, hasMore });
@@ -674,8 +679,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
-    await SetTicketMessagesAsRead(ticket);
+  // Só tenta marcar como lido se for whatsapp e a sessão estiver ativa
+  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.whatsapp?.status === "CONNECTED") {
+    try {
+      await SetTicketMessagesAsRead(ticket);
+    } catch (err) {
+      console.warn("[WARN] Não foi possível marcar como lida. Sessão WhatsApp desconectada ou não inicializada.");
+    }
   }
 
   try {

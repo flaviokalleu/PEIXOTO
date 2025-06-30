@@ -38,8 +38,8 @@ const CreateMessageService = async (messageData: MessageData): Promise<Message |
     return;
   }
 
+  // Corrige: se o id for string (uuid), não envia para o campo id (que é integer no banco)
   const data: any = {
-    id,
     contactId,
     body,
     ticketId,
@@ -47,6 +47,10 @@ const CreateMessageService = async (messageData: MessageData): Promise<Message |
     ack: 2,
     companyId // Incluindo companyId no objeto de dados
   };
+  // Se o id for numérico, usa como id, senão ignora (deixa autoincrement do banco)
+  if (id && !isNaN(Number(id))) {
+    data.id = Number(id);
+  }
 
   if (fileName) {
     data.mediaUrl = fileName;

@@ -455,15 +455,29 @@ const TicketListItem = ({ ticket }) => {
                                     )}
                                 </Typography>
                             )}
-                            {ticket.whatsappId && (
+                            {(ticket.channel === "whatsapp" && ticket.whatsapp?.name) && (
                                 <div
                                     className={classes.userTag}
-                                    title={i18n.t(
-                                        "ticketsList.connectionTitle"
-                                    )}
+                                    title={i18n.t("ticketsList.connectionTitle")}
+                                    style={{ backgroundColor: "#25D366", color: "#fff" }}
                                 >
                                     {ticket.whatsapp?.name}
                                 </div>
+                            )}
+                            {(ticket.channel === "hub" && ticket.hub?.name) && (
+                                <div
+                                    className={classes.userTag}
+                                    title="Hub"
+                                    style={{ backgroundColor: "#007bff", color: "#fff" }}
+                                >
+                                    {ticket.hub?.name}
+                                </div>
+                            )}
+                            {(ticket.channel === "facebook" && ticket.facebook?.name) && (
+                                <div className={classes.userTag} title="Facebook" style={{ backgroundColor: "#4267B2", color: "#fff" }}>{ticket.facebook?.name}</div>
+                            )}
+                            {(ticket.channel === "instagram" && ticket.instagram?.name) && (
+                                <div className={classes.userTag} title="Instagram" style={{ backgroundColor: "#E1306C", color: "#fff" }}>{ticket.instagram?.name}</div>
                             )}
                         </span>
                     }
