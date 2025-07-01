@@ -507,6 +507,20 @@ const MessageInputCustom = (props) => {
 
   const [signMessage, setSignMessage] = useLocalStorage("signOption", true);
 
+  // Função para determinar se deve usar rota do Hub
+  const isHubChannel = (channel) => {
+    return channel && channel !== "whatsapp";
+  };
+
+  // Função para obter a rota correta de envio de mensagem
+  const getMessageRoute = (ticketId, channel) => {
+    if (isHubChannel(channel)) {
+      console.log("🌐 [MessageInputCustom] Usando rota Hub para canal:", channel);
+      return `/hub-message/${ticketId}`;
+    }
+    return `/messages/${ticketId}`;
+  };
+
   const {
     selectedMessages,
     setForwardMessageModalOpen,
@@ -588,7 +602,9 @@ useEffect(() => {
       formData.append("body",  message);
       formData.append("fromMe", true);
 
-      await api.post(`/messages/${ticketId}`, formData);
+      const messageRoute = getMessageRoute(ticketId, channelType);
+      console.log("⚡ [MessageInputCustom] Enviando mídia rápida via:", messageRoute);
+      await api.post(messageRoute, formData);
     } catch (err) {
       toastError(err);
       setLoading(false);
@@ -698,7 +714,9 @@ useEffect(() => {
 
         } else{
 
-          await api.post(`/messages/${ticketId}`, formData, {
+          const messageRoute = getMessageRoute(ticketId, channelType);
+          console.log("📤 [MessageInputCustom] Enviando mídias via:", messageRoute);
+          await api.post(messageRoute, formData, {
             onUploadProgress: (event) => {
               let progress = Math.round(
                 (event.loaded * 100) / event.total
@@ -759,11 +777,9 @@ const handleSendMessage = async () => {
   };
 
   try {
-    if (channelType !== null) {
-      await api.post(`/hub-message/${ticketId}`, message); // Rota para Instagram/Facebook
-    } else {
-      await api.post(`/messages/${ticketId}`, message); // Rota para WhatsApp
-    }
+    const messageRoute = getMessageRoute(ticketId, channelType);
+    console.log("📤 [MessageInputCustom] Enviando mensagem via:", messageRoute);
+    await api.post(messageRoute, message);
   } catch (err) {
     toastError(err);
   }
@@ -804,11 +820,9 @@ const handleSendMessage = async () => {
       formData.append("body", filename);
       formData.append("fromMe", true);
 
-      if (channelType !== null) {
-        await api.post(`/hub-message/${ticketId}`, formData);
-      } else {
-        await api.post(`/messages/${ticketId}`, formData);
-      }
+      const messageRoute = getMessageRoute(ticketId, channelType);
+      console.log("🎤 [MessageInputCustom] Enviando áudio via:", messageRoute);
+      await api.post(messageRoute, formData);
     } catch (err) {
       toastError(err);
     }

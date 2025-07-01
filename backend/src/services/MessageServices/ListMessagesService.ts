@@ -59,6 +59,14 @@ const ListMessagesService = async ({
   // Se o ticket for do canal hub, não filtrar por whatsappId
   const isHubChannel = ticket.channel === "hub";
 
+  console.log("[ListMessagesService] Ticket info:", { 
+    id: ticket.id, 
+    channel: ticket.channel, 
+    isHubChannel, 
+    contactId: ticket.contactId, 
+    whatsappId: ticket.whatsappId 
+  });
+
   const ticketsFilter: any[] | null = [];
 
   const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
@@ -96,11 +104,18 @@ const ListMessagesService = async ({
   if (ticketIds) {
     ticketsFilter.push(ticketIds.map(t => t.id));
   }
+
+  console.log("[ListMessagesService] ticketIds found:", ticketIds.length);
+  console.log("[ListMessagesService] ticketIds:", ticketIds.map(t => t.id));
+
   // }
 
   const tickets: number[] = intersection(...ticketsFilter);
 
-  if (!tickets) {
+  console.log("[ListMessagesService] ticketsFilter:", ticketsFilter);
+  console.log("[ListMessagesService] tickets:", tickets);
+
+  if (!tickets || tickets.length === 0) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
@@ -109,8 +124,8 @@ const ListMessagesService = async ({
   const offset = limit * (+pageNumber - 1);
 
   const { count, rows: messages } = await Message.findAndCountAll({
-    where: { ticketId: tickets, companyId },
-    attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId"],
+    where: { ticketId: { [Op.in]: tickets }, companyId },
+    attributes: ["id", "wid", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId", "quotedMsgId"],
     limit,
     include: [
       {
@@ -151,6 +166,8 @@ const ListMessagesService = async ({
   });
 
   const hasMore = count > offset + messages.length;
+
+  console.log("[ListMessagesService] Retornando:", { count, messagesLength: messages.length, hasMore });
 
   return {
     messages: messages.reverse(),

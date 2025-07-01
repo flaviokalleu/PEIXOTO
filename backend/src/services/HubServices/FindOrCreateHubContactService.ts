@@ -53,16 +53,9 @@ const FindOrCreateContactService = async (
   }
 
   // Se o contato não existir, criamos um novo
-  // O campo number é obrigatório, então para canais alternativos usamos o 'from' como identificador único
-  let numberValue = from;
-  if (channel === 'facebook') {
-    numberValue = `fb_${from}`;
-  } else if (channel === 'instagram') {
-    numberValue = `ig_${from}`;
-  }
   const newContact = await Contact.create({
     name: name || firstName || 'Name Unavailable',
-    number: numberValue,  // Nunca null!
+    number: null,  // Como você está criando o contato via Instagram ou Facebook, número pode ser null
     profilePicUrl: picture,
     messengerId: numberFb || null,
     instagramId: numberIg || null,

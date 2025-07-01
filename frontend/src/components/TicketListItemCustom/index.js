@@ -213,6 +213,20 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
     const { get: getSetting } = useCompanySettings();
 
+    // Função para determinar se deve usar rota do Hub
+    const isHubChannel = (channel) => {
+        return channel && channel !== "whatsapp";
+    };
+
+    // Função para obter a rota correta de envio de mensagem
+    const getMessageRoute = (ticketId, channel) => {
+        if (isHubChannel(channel)) {
+            console.log("🌐 [TicketListItemCustom] Usando rota Hub para canal:", channel);
+            return `/hub-message/${ticketId}`;
+        }
+        return `/messages/${ticketId}`;
+    };
+
     useEffect(() => {
         console.log("======== TicketListItemCustom ===========")
         console.log(ticket)
@@ -415,7 +429,9 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
             body: `${msg.trim()}`,
         };
         try {
-            await api.post(`/messages/${id}`, message);
+            const messageRoute = getMessageRoute(id, ticket.channel);
+            console.log("📤 [TicketListItemCustom] Enviando mensagem de boas-vindas via:", messageRoute);
+            await api.post(messageRoute, message);
         } catch (err) {
             toastError(err);
         }

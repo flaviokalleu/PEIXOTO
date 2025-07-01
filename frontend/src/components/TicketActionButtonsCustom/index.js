@@ -108,6 +108,20 @@ const TicketActionButtonsCustom = ({ ticket
     const { user } = useContext(AuthContext);
     const { setCurrentTicket, setTabOpen } = useContext(TicketsContext);
     const [open, setOpen] = React.useState(false);
+
+    // Função para determinar se deve usar rota do Hub
+    const isHubChannel = (channel) => {
+        return channel && channel !== "whatsapp";
+    };
+
+    // Função para obter a rota correta de envio de mensagem
+    const getMessageRoute = (ticketId, channel) => {
+        if (isHubChannel(channel)) {
+            console.log("🌐 [TicketActionButtonsCustom] Usando rota Hub para canal:", channel);
+            return `/hub-message/${ticketId}`;
+        }
+        return `/messages/${ticketId}`;
+    };
     const formRef = React.useRef(null);
     const [confirmationOpen, setConfirmationOpen] = useState(false);
     const [transferTicketModalOpen, setTransferTicketModalOpen] = useState(false);
@@ -307,7 +321,9 @@ const TicketActionButtonsCustom = ({ ticket
             body: `${msg.trim()}`,
         };
         try {
-            await api.post(`/messages/${id}`, message);
+            const messageRoute = getMessageRoute(id, ticket.channel);
+            console.log("📤 [TicketActionButtonsCustom] Enviando mensagem de boas-vindas via:", messageRoute);
+            await api.post(messageRoute, message);
         } catch (err) {
             toastError(err);
         }

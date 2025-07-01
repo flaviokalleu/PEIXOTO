@@ -175,21 +175,35 @@ const contactsArrayMessageGet = (msg: any) => {
   let contacts = bodymessage.split("BEGIN:");
 
   contacts.shift();
+
   let finalContacts = "";
   for (let contact of contacts) {
-    finalContacts = finalContacts + multVecardGet(contact);
+    finalContacts += multVecardGet(contact);
   }
-
   return finalContacts;
 };
 
 const getTypeMessage = (msg: proto.IWebMessageInfo): string => {
   const msgType = getContentType(msg.message);
-  if (msg.message?.extendedTextMessage && msg.message?.extendedTextMessage?.contextInfo && msg.message?.extendedTextMessage?.contextInfo?.externalAdReply) {
-    return 'adMetaPreview'; // Adicionado para tratar mensagens de anúncios;
+  if (
+    msg.message?.extendedTextMessage &&
+    msg.message?.extendedTextMessage?.contextInfo &&
+    msg.message?.extendedTextMessage?.contextInfo?.externalAdReply
+  ) {
+    return "adMetaPreview"; // Adicionado para tratar mensagens de anúncios
   }
   if (msg.message?.viewOnceMessageV2) {
     return "viewOnceMessageV2";
+  }
+  // Corrige tipos de mensagem para garantir que não retorne undefined
+  if (!msgType && msg.message?.reactionMessage) {
+    return "reactionMessage";
+  }
+  if (!msgType && msg.message?.protocolMessage) {
+    return "protocolMessage";
+  }
+  if (!msgType && msg.message?.ephemeralMessage) {
+    return "ephemeralMessage";
   }
   return msgType;
 };

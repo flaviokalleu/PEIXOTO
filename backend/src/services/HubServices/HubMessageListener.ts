@@ -15,12 +15,12 @@ export interface HubInMessage {
   timestamp: string;
   subscriptionId: string;
   channel: "telegram" | "whatsapp" | "facebook" | "instagram" | "sms" | "email";
-  direction: "IN";
+  direction: "IN" | "OUT";
   message: {
     id: string;
     from: string;
     to: string;
-    direction: "IN";
+    direction: "IN" | "OUT";
     channel:
       | "telegram"
       | "whatsapp"
@@ -85,14 +85,9 @@ const HubMessageListener = async (
   medias: Express.Multer.File[]
 ) => {
   console.log("HubMessageListener", message);
-  console.log("contents", message.message.contents);
+  console.log("contents", message.message?.contents);
 
-  // Se a mensagem for enviada de fora do sistema (OUT), ignoramos
-  const ignoreEvent = message.direction === "OUT";
-  if (ignoreEvent) {
-    return;
-  }
-
+  // Verificar se é uma mensagem de status (confirmação de envio)
   const isMessageFromMe = message.type === "MESSAGE_STATUS";
 
   if (isMessageFromMe) {
@@ -116,8 +111,15 @@ const HubMessageListener = async (
 
   // Desestruturando os dados da mensagem recebida
   const {
-    message: { id, from, channel, contents, visitor }
+    message: { id, from, channel, contents, visitor, direction }
   } = message as HubInMessage;
+
+  // Determinar se a mensagem é do sistema ou do usuário
+  // OUT = sistema enviando para usuário (fromMe = true)
+  // IN = usuário enviando para sistema (fromMe = false)
+  const isFromMe = direction === "OUT";
+
+  console.log(`📥 Processando mensagem ${direction}: ${isFromMe ? 'do sistema' : 'do usuário'}`);
 
   try {
 
@@ -151,98 +153,86 @@ const HubMessageListener = async (
     
     
   if (contents[0]?.type === "text") {
-  const messageData = await CreateMessageService({
-    id,
-    contactId: contact.id,
-    body: contents[0].text || "",
-    ticketId: ticket.id,
-    fromMe: false,
-    companyId: contact.companyId || whatsapp.companyId || ticket.companyId
-  });
-
-  await Ticket.update(
-    { lastMessage: contents[0].text || "" },
-    { where: { id: ticket.id } }
-  );
-
-  const io = getIO();
-  const updatedTicket = await Ticket.findByPk(ticket.id, { include: ["contact"] });
-  console.log("Ticket atualizado após mensagem de texto:", updatedTicket);
-  if (updatedTicket) {
-
-    // Emitir evento 'create' para o frontend processar a nova mensagem
-      io.to(`company-${companyId}-mainchannel`)
-        .to(updatedTicket.status)
-        .to(ticket.id.toString())
-        .emit(`company-${companyId}-ticket`, {
-          action: "create",
-          message: messageData,
-          ticket: updatedTicket
-        });
-
-    io.to(updatedTicket.status)
-    .to(ticket.id.toString())
-    .emit(`company-${companyId}-ticket`, {
-      action: "update",
-      ticket: updatedTicket
-    });
-    console.log("Evento 'ticket' emitido para mensagem de texto:", {
-      status: updatedTicket.status,
-      ticketId: ticket.id.toString(),
-      lastMessage: updatedTicket.lastMessage
-    });
-  }
-} else if (contents[0]?.fileUrl) {
-  //const media = await downloadFiles(contents[0].fileUrl, companyId);
-
-  const media = await downloadFiles(contents[0].fileUrl);
-
-  if (typeof media.mimeType === "string") {
     const messageData = await CreateMessageService({
       id,
       contactId: contact.id,
       body: contents[0].text || "",
       ticketId: ticket.id,
-      fromMe: false,
-      companyId: contact.companyId || whatsapp.companyId || ticket.companyId,
-      fileName: `${media.filename}`,
-      mediaType: media.mimeType.split("/")[0],
-      originalName: media.originalname
+      fromMe: isFromMe,
+      companyId: contact.companyId || whatsapp.companyId || ticket.companyId
     });
 
     await Ticket.update(
-      { lastMessage: contents[0].text || media.originalname },
+      { lastMessage: contents[0].text || "" },
       { where: { id: ticket.id } }
     );
 
+    // Emitir apenas evento de ticket atualizado (mensagem já é emitida pelo CreateMessageService)
     const io = getIO();
-    const updatedTicket = await Ticket.findByPk(ticket.id, { include: ["contact"] });
-    console.log("Ticket atualizado após mensagem com arquivo:", updatedTicket);
+    const updatedTicket = await Ticket.findByPk(ticket.id, { 
+      include: ["contact"],
+      attributes: ["id", "uuid", "status", "lastMessage", "companyId", "contactId", "whatsappId"]
+    });
+    
+    console.log("Ticket atualizado após mensagem de texto:", updatedTicket);
+    
     if (updatedTicket) {
-
-      // Emitir evento 'create' para o frontend processar a nova mensagem
-      io.to(`company-${companyId}-mainchannel`)
-        .to(updatedTicket.status)
-        .to(ticket.id.toString())
+      io.to(updatedTicket.status)
+        .to(updatedTicket.uuid.toString())
         .emit(`company-${companyId}-ticket`, {
-          action: "create",
-          message: messageData,
+          action: "update",
           ticket: updatedTicket
         });
-      io.to(updatedTicket.status)
-      .to(ticket.id.toString())
-      .emit(`company-${companyId}-ticket`, {
-        action: "update",
-        ticket: updatedTicket
-      });
-      console.log("Evento 'ticket' emitido para mensagem com arquivo:", {
+      
+      console.log("Evento 'ticket' emitido para mensagem de texto:", {
         status: updatedTicket.status,
-        ticketId: ticket.id.toString(),
+        ticketUuid: updatedTicket.uuid,
         lastMessage: updatedTicket.lastMessage
       });
     }
+} else if (contents[0]?.fileUrl) {
+    const media = await downloadFiles(contents[0].fileUrl);
+
+    if (typeof media.mimeType === "string") {
+      const messageData = await CreateMessageService({
+        id,
+        contactId: contact.id,
+        body: contents[0].text || "",
+        ticketId: ticket.id,
+        fromMe: isFromMe,
+        companyId: contact.companyId || whatsapp.companyId || ticket.companyId,
+        fileName: `${media.filename}`,
+        mediaType: media.mimeType.split("/")[0],
+        originalName: media.originalname
+      });
+
+      await Ticket.update(
+        { lastMessage: contents[0].text || media.originalname },
+        { where: { id: ticket.id } }
+      );
+
+      // Emitir apenas evento de ticket atualizado (mensagem já é emitida pelo CreateMessageService)
+      const io = getIO();
+      const updatedTicket = await Ticket.findByPk(ticket.id, { include: ["contact"] });
+      
+      console.log("Ticket atualizado após mensagem com arquivo:", updatedTicket);
+      
+      if (updatedTicket) {
+        io.to(updatedTicket.status)
+          .to(updatedTicket.uuid.toString())
+          .emit(`company-${companyId}-ticket`, {
+            action: "update",
+            ticket: updatedTicket
+          });
+        
+        console.log("Evento 'ticket' emitido para mensagem com arquivo:", {
+          status: updatedTicket.status,
+          ticketUuid: updatedTicket.uuid,
+          lastMessage: updatedTicket.lastMessage
+        });
+      }
+    }
   }
-}
   } catch (error: any) {
     console.log(error);
   }

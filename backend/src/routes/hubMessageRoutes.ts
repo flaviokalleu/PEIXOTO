@@ -8,6 +8,7 @@ import * as MessageController from "../controllers/MessageHubController";
 const hubMessageRoutes = express.Router();
 const upload = multer(uploadConfig);
 
+hubMessageRoutes.get("/hub-messages/:ticketId", isAuth, MessageController.index);
 hubMessageRoutes.post("/hub-message/:ticketId",isAuth,upload.array("medias"),MessageController.send);
 hubMessageRoutes.post("/hub-ticket", isAuth, MessageController.store);
 
