@@ -358,20 +358,6 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
   const inputRef = useRef();
   const [onDragEnter, setOnDragEnter] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
-
-  // Função para determinar se deve usar rota do Hub
-  const isHubChannel = (channel) => {
-    return channel && channel !== "whatsapp";
-  };
-
-  // Função para obter a rota correta de envio de mensagem
-  const getMessageRoute = (ticketId, channel) => {
-    if (isHubChannel(channel)) {
-      console.log("🌐 [MessageInput] Usando rota Hub para canal:", channel);
-      return `/hub-message/${ticketId}`;
-    }
-    return `/messages/${ticketId}`;
-  };
   const { setReplyingMessage, replyingMessage } = useContext(ReplyMessageContext);
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
   const { user } = useContext(AuthContext);
@@ -616,9 +602,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
     });
 
     try {
-      const messageRoute = getMessageRoute(ticketId, ticketChannel);
-      console.log("📤 [MessageInput] Enviando mídias via:", messageRoute);
-      await api.post(messageRoute, formData);
+      await api.post(`/messages/${ticketId}`, formData);
     } catch (err) {
       toastError(err);
     }
@@ -649,9 +633,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       vCard: vcard,
     };
     try {
-      const messageRoute = getMessageRoute(ticketId, ticketChannel);
-      console.log("📤 [MessageInput] Enviando vCard via:", messageRoute);
-      await api.post(messageRoute, message);
+      await api.post(`/messages/${ticketId}`, message);
     } catch (err) {
       toastError(err);
     }
@@ -689,12 +671,9 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
 
     try {
       if (editingMessage !== null) {
-        // Edição de mensagem sempre usa rota padrão
         await api.post(`/messages/edit/${editingMessage.id}`, message);
       } else {
-        const messageRoute = getMessageRoute(ticketId, ticketChannel);
-        console.log("📤 [MessageInput] Enviando mensagem de texto via:", messageRoute);
-        await api.post(messageRoute, message);
+        await api.post(`/messages/${ticketId}`, message);
       }
     } catch (err) {
       toastError(err);
@@ -788,9 +767,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       formData.append("body", privateMessage ? `\u200d` : "");
       formData.append("fromMe", true);
 
-      const messageRoute = getMessageRoute(ticketId, ticketChannel);
-      console.log("📷 [MessageInput] Enviando foto da câmera via:", messageRoute);
-      await api.post(messageRoute, formData);
+      await api.post(`/messages/${ticketId}`, formData);
     } catch (err) {
       toastError(err);
       setLoading(false);
@@ -810,9 +787,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       formData.append("fromMe", true);
 
       if (isMounted.current) {
-        const messageRoute = getMessageRoute(ticketId, ticketChannel);
-        console.log("⚡ [MessageInput] Enviando mídia rápida via:", messageRoute);
-        await api.post(messageRoute, formData);
+        await api.post(`/messages/${ticketId}`, formData);
       }
     } catch (err) {
       toastError(err);
@@ -842,9 +817,7 @@ const MessageInput = ({ ticketId, ticketStatus, droppedFiles, contactId, ticketC
       formData.append("fromMe", true);
 
       if (isMounted.current) {
-        const messageRoute = getMessageRoute(ticketId, ticketChannel);
-        console.log("🎤 [MessageInput] Enviando áudio via:", messageRoute);
-        await api.post(messageRoute, formData);
+        await api.post(`/messages/${ticketId}`, formData);
       }
     } catch (err) {
       toastError(err);

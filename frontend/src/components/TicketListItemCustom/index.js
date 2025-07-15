@@ -213,20 +213,6 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
 
     const { get: getSetting } = useCompanySettings();
 
-    // Função para determinar se deve usar rota do Hub
-    const isHubChannel = (channel) => {
-        return channel && channel !== "whatsapp";
-    };
-
-    // Função para obter a rota correta de envio de mensagem
-    const getMessageRoute = (ticketId, channel) => {
-        if (isHubChannel(channel)) {
-            console.log("🌐 [TicketListItemCustom] Usando rota Hub para canal:", channel);
-            return `/hub-message/${ticketId}`;
-        }
-        return `/messages/${ticketId}`;
-    };
-
     useEffect(() => {
         console.log("======== TicketListItemCustom ===========")
         console.log(ticket)
@@ -429,9 +415,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
             body: `${msg.trim()}`,
         };
         try {
-            const messageRoute = getMessageRoute(id, ticket.channel);
-            console.log("📤 [TicketListItemCustom] Enviando mensagem de boas-vindas via:", messageRoute);
-            await api.post(messageRoute, message);
+            await api.post(`/messages/${id}`, message);
         } catch (err) {
             toastError(err);
         }
@@ -571,17 +555,7 @@ const TicketListItemCustom = ({ setTabOpen, ticket }) => {
                                     <br />
                                 )}
                                 <span className={classes.secondaryContentSecond} >
-                                    {ticket.channel === "whatsapp" && ticket?.whatsapp ? (
-                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#25D366" }}>{ticket.whatsapp?.name?.toUpperCase()}</Badge>
-                                    ) : ticket.channel === "hub" && ticket?.hub ? (
-                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#007bff" }}>{ticket.hub?.name?.toUpperCase() || "HUB"}</Badge>
-                                    ) : ticket.channel === "facebook" && ticket?.facebook ? (
-                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#4267B2" }}>{ticket.facebook?.name?.toUpperCase()}</Badge>
-                                    ) : ticket.channel === "instagram" && ticket?.instagram ? (
-                                      <Badge className={classes.connectionTag} style={{ backgroundColor: "#E1306C" }}>{ticket.instagram?.name?.toUpperCase()}</Badge>
-                                    ) : (
-                                      <br />
-                                    )}
+                                    {ticket?.whatsapp ? <Badge className={classes.connectionTag} style={{ backgroundColor: ticket.channel === "whatsapp" ? "#25D366" : ticket.channel === "facebook" ? "#4267B2" : "#E1306C" }}>{ticket.whatsapp?.name.toUpperCase()}</Badge> : <br></br>}
                                     {<Badge style={{ backgroundColor: ticket.queue?.color || "#7c7c7c" }} className={classes.connectionTag}>{ticket.queueId ? ticket.queue?.name.toUpperCase() : ticket.status === "lgpd" ? "LGPD" : "SEM FILA"}</Badge>}
                                     {ticket?.user && (<Badge style={{ backgroundColor: "#000000" }} className={classes.connectionTag}>{ticket.user?.name.toUpperCase()}</Badge>)}
                                 </span>

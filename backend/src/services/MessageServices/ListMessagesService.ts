@@ -51,22 +51,6 @@ const ListMessagesService = async ({
     }
   });
 
-  // Permitir tickets do canal "hub" além do whatsapp
-  if (!ticket) {
-    throw new AppError("ERR_NO_TICKET_FOUND", 404);
-  }
-
-  // Se o ticket for do canal hub, não filtrar por whatsappId
-  const isHubChannel = ticket.channel === "hub";
-
-  console.log("[ListMessagesService] Ticket info:", { 
-    id: ticket.id, 
-    channel: ticket.channel, 
-    isHubChannel, 
-    contactId: ticket.contactId, 
-    whatsappId: ticket.whatsappId 
-  });
-
   const ticketsFilter: any[] | null = [];
 
   const isAllHistoricEnabled = await isQueueIdHistoryBlocked({ userRequest: user.id });
@@ -74,28 +58,30 @@ const ListMessagesService = async ({
   let ticketIds = [];
   if (!isAllHistoricEnabled) {
     ticketIds = await Ticket.findAll({
-      where: {
+      where:
+      {
         id: { [Op.lte]: ticket.id },
         companyId: ticket.companyId,
         contactId: ticket.contactId,
-        ...(isHubChannel ? {} : { whatsappId: ticket.whatsappId }),
+        whatsappId: ticket.whatsappId,
         isGroup: ticket.isGroup,
-        queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup)
-          ? { [Op.or]: [queues, null] }
-          : { [Op.in]: queues },
-        channel: ticket.channel // garante que só pega tickets do mesmo canal
+        queueId: user.profile === "admin" || user.allTicket === "enable" || (ticket.isGroup && user.allowGroup) ?
+          {
+            [Op.or]: [queues, null]
+          } :
+          { [Op.in]: queues },
       },
       attributes: ["id"]
     });
   } else {
     ticketIds = await Ticket.findAll({
-      where: {
+      where:
+      {
         id: { [Op.lte]: ticket.id },
         companyId: ticket.companyId,
         contactId: ticket.contactId,
-        ...(isHubChannel ? {} : { whatsappId: ticket.whatsappId }),
-        isGroup: ticket.isGroup,
-        channel: ticket.channel
+        whatsappId: ticket.whatsappId,
+        isGroup: ticket.isGroup
       },
       attributes: ["id"]
     });
@@ -104,18 +90,11 @@ const ListMessagesService = async ({
   if (ticketIds) {
     ticketsFilter.push(ticketIds.map(t => t.id));
   }
-
-  console.log("[ListMessagesService] ticketIds found:", ticketIds.length);
-  console.log("[ListMessagesService] ticketIds:", ticketIds.map(t => t.id));
-
   // }
 
   const tickets: number[] = intersection(...ticketsFilter);
 
-  console.log("[ListMessagesService] ticketsFilter:", ticketsFilter);
-  console.log("[ListMessagesService] tickets:", tickets);
-
-  if (!tickets || tickets.length === 0) {
+  if (!tickets) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
@@ -124,8 +103,8 @@ const ListMessagesService = async ({
   const offset = limit * (+pageNumber - 1);
 
   const { count, rows: messages } = await Message.findAndCountAll({
-    where: { ticketId: { [Op.in]: tickets }, companyId },
-    attributes: ["id", "wid", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId", "quotedMsgId"],
+    where: { ticketId: tickets, companyId },
+    attributes: ["id", "fromMe", "mediaUrl", "body", "mediaType", "ack", "createdAt", "ticketId", "isDeleted", "queueId", "isForwarded", "isEdited", "isPrivate", "companyId"],
     limit,
     include: [
       {
@@ -166,8 +145,6 @@ const ListMessagesService = async ({
   });
 
   const hasMore = count > offset + messages.length;
-
-  console.log("[ListMessagesService] Retornando:", { count, messagesLength: messages.length, hasMore });
 
   return {
     messages: messages.reverse(),

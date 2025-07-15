@@ -20,10 +20,7 @@ import TicketTraking from "./TicketTraking";
 class Message extends Model<Message> {
   @PrimaryKey
   @Column
-  id: string;
-
-  @Column(DataType.STRING)
-  wid: string;
+  id: number;
 
   @Column(DataType.STRING)
   remoteJid: string;
@@ -48,20 +45,21 @@ class Message extends Model<Message> {
 
   @Column(DataType.TEXT)
   body: string;
-  
-  @Column(DataType.JSON)
-  reactions: { type: string; userId: number; }[];
-  
+
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
-      // return `${process.env.BACKEND_URL}/public/${this.getDataValue("mediaUrl")}`;
-
-      return `${process.env.BACKEND_URL}/public/company${this.companyId}/${this.getDataValue("mediaUrl")}`;
-
+      // Para mensagens privadas, usar rota autenticada
+      if (this.isPrivate) {
+        return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/media/${this.companyId}/${this.getDataValue("mediaUrl")}`;
+      }
+      
+      // Para mensagens normais, usar rota pública
+      return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/public/company${this.companyId}/${this.getDataValue("mediaUrl")}`;
     }
     return null;
   }
+
   @Column
   mediaType: string;
 
@@ -69,7 +67,6 @@ class Message extends Model<Message> {
   @Column
   isDeleted: boolean;
 
-  @CreatedAt
   @Column(DataType.DATE(6))
   createdAt: Date;
 
@@ -91,6 +88,13 @@ class Message extends Model<Message> {
   @BelongsTo(() => Ticket)
   ticket: Ticket;
 
+  @ForeignKey(() => TicketTraking)
+  @Column
+  ticketTrakingId: number;
+
+  @BelongsTo(() => TicketTraking, "ticketTrakingId")
+  ticketTraking: TicketTraking;
+
   @ForeignKey(() => Contact)
   @Column
   contactId: number;
@@ -111,26 +115,21 @@ class Message extends Model<Message> {
 
   @BelongsTo(() => Queue)
   queue: Queue;
+  
+  @Column
+  wid: string;
 
-  @ForeignKey(() => TicketTraking)
-  @Column
-  ticketTrakingId: number;
-
-  @BelongsTo(() => TicketTraking)
-  ticketTraking: TicketTraking;
-  
-  @Default(false)
-  @Column
-  isEdited: boolean;
-  
-  @Default(false)
-  @Column
-  isForwarded: boolean;
-  
   @Default(false)
   @Column
   isPrivate: boolean;
-  
+
+  @Default(false)
+  @Column
+  isEdited: boolean;
+
+  @Default(false)
+  @Column
+  isForwarded: boolean;
 }
 
 export default Message;

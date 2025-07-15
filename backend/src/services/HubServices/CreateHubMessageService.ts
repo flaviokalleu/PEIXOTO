@@ -9,18 +9,19 @@ interface MessageData {
   body: string;
   ticketId: number;
   fromMe: boolean;
-  queueId?: number;
   fileName?: string;
   mediaType?: string;
   originalName?: string;
-  companyId: number; // Adicionando o companyId aqui
 }
 
-const CreateMessageService = async (messageData: MessageData): Promise<Message | any> => {
-  
-  console.log("creating message");
-  console.log({messageData});
-  
+const CreateMessageService = async (
+  messageData: MessageData
+): Promise<Message | any> => {
+  // console.log("creating message");
+  // console.log({
+  //   messageData
+  // });
+
   const {
     id,
     contactId,
@@ -29,42 +30,42 @@ const CreateMessageService = async (messageData: MessageData): Promise<Message |
     fromMe,
     fileName,
     mediaType,
-    originalName,
-    companyId // Adicionando companyId
+    originalName
   } = messageData;
 
-  // Verificando se a mensagem ou arquivo está vazio
   if ((!body || body === "") && (!fileName || fileName === "")) {
     return;
   }
 
   const data: any = {
     id,
-    wid: id, // Garantir que o wid seja definido
     contactId,
     body,
     ticketId,
     fromMe,
-    ack: 2,
-    companyId // Incluindo companyId no objeto de dados
+    ack: 2
   };
 
   if (fileName) {
     data.mediaUrl = fileName;
     data.mediaType = mediaType === "photo" ? "image" : mediaType;
     data.body = data.mediaUrl;
-
-    console.log("MEDIA TYPE DENTRO DO CREATEHUBMESSAGESERVICE:", data.mediaType);
   }
 
-  try {
-    console.log("🔥 Tentando criar mensagem no banco:", data);
-    
-    const newMessage = await Message.create(data); // Salvando a mensagem no banco de dados
-    console.log("✅ Nova mensagem criada no banco:", newMessage.toJSON());
+  // console.log({
+  //   creatingMediaMessageData: data
+  // });
 
-    // LOG: Verificar a nova mensagem criada
-    console.log("🔍 Buscando mensagem completa do banco...");
+  try {
+    const newMessage = await Message.create(data);
+
+    // await newMessage.reload({
+    //   include: [
+    //     {
+    //       association: "ticket",
+    //     }
+    //   ]
+    // });
 
     const message = await Message.findByPk(messageData.id, {
       include: [
@@ -89,50 +90,24 @@ const CreateMessageService = async (messageData: MessageData): Promise<Message |
       ]
     });
 
-    console.log("📦 Mensagem completa encontrada:", message ? message.toJSON() : "MENSAGEM NÃO ENCONTRADA");
-
-    if (message.ticket.queueId !== null && message.queueId === null) {
-      await message.update({ queueId: message.ticket.queueId });
-    }
-
-    if (!message) {
-      throw new Error("ERR_CREATING_MESSAGE");
-    }
-
-
-    if (message) {
-      console.log("🚀 Emitindo evento WebSocket para:", {
-        ticketUuid: message.ticket.uuid,
-        companyId: companyId,
-        event: `company-${companyId}-appMessage`,
-        action: "create",
-        messageId: message.id,
-        body: message.body
-      });
-
+    if(message){
       const io = getIO();
-      io.to(message.ticket.uuid.toString()) // Usando UUID em vez de ID
-        .to(`company-${companyId}-${message.ticket.status}`)
-        .to(`company-${companyId}-notification`)
-        .to(`queue-${message.ticket.queueId}-${message.ticket.status}`)
-        .to(`queue-${message.ticket.queueId}-notification`)
-        .emit(`company-${companyId}-appMessage`, {
+      io.to(message.ticketId.toString())
+        .to(message.ticket.status)
+        .to("notification")
+        .emit("appMessage", {
           action: "create",
           message,
           ticket: message.ticket,
           contact: message.ticket.contact
         });
-      
-      console.log("✅ Evento WebSocket emitido com sucesso!");
-    } else {
-      console.log("❌ Mensagem não encontrada após criação!");
-    }
+      }
 
-    return message;
+    return newMessage;
   } catch (error) {
-    console.error("Erro ao criar mensagem:", error);
-    return null;
+    console.log(error);
   }
+
 };
 
 export default CreateMessageService;

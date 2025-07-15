@@ -34,7 +34,6 @@ import CachedIcon from "@material-ui/icons/Cached";
 
 import MainListItems from "./MainListItems";
 import NotificationsPopOver from "../components/NotificationsPopOver";
-
 import NotificationsVolume from "../components/NotificationsVolume";
 import UserModal from "../components/UserModal";
 import { AuthContext } from "../context/Auth/AuthContext";
@@ -538,7 +537,6 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           {/* <DarkMode themeToggle={themeToggle} /> */}
 
           {user.id && <NotificationsPopOver volume={volume} />}
-          
 
           <AnnouncementsPopover />
 

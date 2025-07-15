@@ -63,16 +63,15 @@ type MessageData = {
   vCard?: Contact;
 };
 
-// LOG para depuração de mensagens recebidas
+// Função utilitária para extrair o campo body de mensagens
 const extractMessageBody = (msg: any, fallback: string = "Mensagem interativa"): string => {
-  console.log("[extractMessageBody] msg:", JSON.stringify(msg));
   if (msg.message?.interactiveMessage?.body?.text) {
     return msg.message.interactiveMessage.body.text;
   }
   if (msg.message?.listMessage?.description) {
     return msg.message.listMessage.description;
   }
-  if (msg.message?.interactiveMessage?.nativeFlowMessage?.buttons?.[0]?.buttonParamsJson) {
+  if (msg.message?.interactiveMessage?.nativeFlowMessage?.buttons[0]?.buttonParamsJson) {
     try {
       const params = JSON.parse(msg.message.interactiveMessage.nativeFlowMessage.buttons[0].buttonParamsJson);
       return params.order?.items[0]?.name || params.display_text || fallback;
@@ -96,9 +95,6 @@ const generateRandomCode = (length: number = 11): string => {
 
 // Adicionar reação
 export const addReaction = async (req: Request, res: Response): Promise<Response> => {
-  console.log("[addReaction] req.body:", req.body);
-// LOG na listagem de mensagens
-// OBS: Função duplicada removida para evitar erro de declaração duplicada.
   try {
     const { messageId } = req.params;
     const { type } = req.body;
@@ -645,13 +641,8 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     user: user!,
   });
 
-  // Só tenta marcar como lido se for whatsapp e a sessão estiver ativa
-  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.whatsapp?.status === "CONNECTED") {
-    try {
-      await SetTicketMessagesAsRead(ticket);
-    } catch (err) {
-      console.warn("[WARN] Não foi possível marcar como lida. Sessão WhatsApp desconectada ou não inicializada.");
-    }
+  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+    await SetTicketMessagesAsRead(ticket);
   }
 
   return res.json({ count, messages, ticket, hasMore });
@@ -679,13 +670,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
 
-  // Só tenta marcar como lido se for whatsapp e a sessão estiver ativa
-  if (ticket.channel === "whatsapp" && ticket.whatsappId && ticket.whatsapp?.status === "CONNECTED") {
-    try {
-      await SetTicketMessagesAsRead(ticket);
-    } catch (err) {
-      console.warn("[WARN] Não foi possível marcar como lida. Sessão WhatsApp desconectada ou não inicializada.");
-    }
+  if (ticket.channel === "whatsapp" && ticket.whatsappId) {
+    await SetTicketMessagesAsRead(ticket);
   }
 
   try {

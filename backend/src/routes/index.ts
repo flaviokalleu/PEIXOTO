@@ -44,9 +44,6 @@ import scheduleMessageRoutes from "./ScheduledMessagesRoutes";
 import flowDefaultRoutes from "./flowDefaultRoutes";
 import flowBuilder from "./flowBuilderRoutes";
 import flowCampaignRoutes from "./flowCampaignRoutes";
-
-import hubNotificaMeRoutes from "./hubNotificaMeRoutes";
-
 import hubChannelRoutes from "./hubChannelRoutes";
 import hubMessageRoutes from "./hubMessageRoutes";
 import hubWebhookRoutes from "./hubWebhookRoutes";
@@ -96,8 +93,6 @@ routes.use(scheduleMessageRoutes);
 routes.use(flowDefaultRoutes);
 routes.use(flowBuilder);
 routes.use(flowCampaignRoutes);
-routes.use(hubNotificaMeRoutes);
-
 routes.use(hubChannelRoutes);
 routes.use(hubMessageRoutes);
 routes.use(hubWebhookRoutes);

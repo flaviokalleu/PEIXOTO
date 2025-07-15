@@ -341,25 +341,17 @@ export const update = async (
   const ticketData: TicketData = req.body;
   const { companyId } = req.user;
 
-  try {
-    const mutex = new Mutex();
-    const { ticket } = await mutex.runExclusive(async () => {
-      const result = await UpdateTicketService({
-        ticketData,
-        ticketId,
-        companyId
-      });
-      return result;
+  const mutex = new Mutex();
+  const { ticket } = await mutex.runExclusive(async () => {
+    const result = await UpdateTicketService({
+      ticketData,
+      ticketId,
+      companyId
     });
+    return result;
+  });
 
-    return res.status(200).json(ticket);
-  } catch (error) {
-    console.error("Error updating ticket:", error);
-    return res.status(500).json({ 
-      error: "Failed to update ticket",
-      message: error.message 
-    });
-  }
+  return res.status(200).json(ticket);
 };
 
 export const remove = async (

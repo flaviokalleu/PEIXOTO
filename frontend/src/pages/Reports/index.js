@@ -176,15 +176,9 @@ const Reports = () => {
         const dataCriacao = createdAt.toLocaleDateString(); // Obtém a data no formato 'dd/mm/aaaa'
         const horaCriacao = createdAt.toLocaleTimeString(); // Obtém a hora no formato 'hh:mm:ss'
 
-        // Nome da conexão de acordo com o canal
-        let conexao = ticket.whatsappName;
-        if (ticket.channel === "hub") conexao = ticket.hubName || "Hub";
-        if (ticket.channel === "facebook") conexao = ticket.facebookName || "Facebook";
-        if (ticket.channel === "instagram") conexao = ticket.instagramName || "Instagram";
-
         return {
           id: ticket.id,
-          Conexão: conexao,
+          Conexão: ticket.whatsappName,
           Contato: ticket.contactName,
           Usuário: ticket.userName,
           Fila: ticket.queueName,
@@ -481,12 +475,7 @@ const Reports = () => {
               {tickets.map((ticket) => (
                 <TableRow key={ticket.id}>
                   <TableCell align="center">{ticket.id}</TableCell>
-                  <TableCell align="left">
-                    {ticket?.channel === "whatsapp" && ticket?.whatsappName}
-                    {ticket?.channel === "hub" && ticket?.hubName}
-                    {ticket?.channel === "facebook" && ticket?.facebookName}
-                    {ticket?.channel === "instagram" && ticket?.instagramName}
-                  </TableCell>
+                  <TableCell align="left">{ticket?.whatsappName}</TableCell>
                   <TableCell align="left">{ticket?.contactName}</TableCell>
                   <TableCell align="left">{ticket?.userName}</TableCell>
                   <TableCell align="left">{ticket?.queueName}</TableCell>

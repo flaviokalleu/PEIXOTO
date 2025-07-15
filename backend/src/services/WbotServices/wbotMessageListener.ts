@@ -175,35 +175,21 @@ const contactsArrayMessageGet = (msg: any) => {
   let contacts = bodymessage.split("BEGIN:");
 
   contacts.shift();
-
   let finalContacts = "";
   for (let contact of contacts) {
-    finalContacts += multVecardGet(contact);
+    finalContacts = finalContacts + multVecardGet(contact);
   }
+
   return finalContacts;
 };
 
 const getTypeMessage = (msg: proto.IWebMessageInfo): string => {
   const msgType = getContentType(msg.message);
-  if (
-    msg.message?.extendedTextMessage &&
-    msg.message?.extendedTextMessage?.contextInfo &&
-    msg.message?.extendedTextMessage?.contextInfo?.externalAdReply
-  ) {
-    return "adMetaPreview"; // Adicionado para tratar mensagens de anúncios
+  if (msg.message?.extendedTextMessage && msg.message?.extendedTextMessage?.contextInfo && msg.message?.extendedTextMessage?.contextInfo?.externalAdReply) {
+    return 'adMetaPreview'; // Adicionado para tratar mensagens de anúncios;
   }
   if (msg.message?.viewOnceMessageV2) {
     return "viewOnceMessageV2";
-  }
-  // Corrige tipos de mensagem para garantir que não retorne undefined
-  if (!msgType && msg.message?.reactionMessage) {
-    return "reactionMessage";
-  }
-  if (!msgType && msg.message?.protocolMessage) {
-    return "protocolMessage";
-  }
-  if (!msgType && msg.message?.ephemeralMessage) {
-    return "ephemeralMessage";
   }
   return msgType;
 };
@@ -4380,6 +4366,28 @@ const handleMessage = async (
             await ticketTraking.update({
               chatbotAt: null
             });
+          }
+
+          const outOfHoursMessage = whatsapp.outOfHoursMessage;
+
+          if (outOfHoursMessage !== "") {
+            const body = formatBody(`${outOfHoursMessage}`, ticket);
+
+            const debouncedSentMessage = debounce(
+              async () => {
+                await wbot.sendMessage(
+                  `${ticket.contact.number}@${
+                    ticket.isGroup ? "g.us" : "s.whatsapp.net"
+                  }`,
+                  {
+                    text: body
+                  }
+                );
+              },
+              1000,
+              ticket.id
+            );
+            debouncedSentMessage();
           }
 
           //atualiza o contador de vezes que enviou o bot e que foi enviado fora de hora

@@ -1,41 +1,26 @@
 require("dotenv").config();
 const { Client, TextContent } = require("notificamehubsdk");
 import Contact from "../../models/Contact";
-import Ticket from "../../models/Ticket";
 import CreateMessageService from "./CreateHubMessageService";
 import { showHubToken } from "../../helpers/showHubToken";
-import { getIO } from "../../libs/socket";
 
 export const SendTextMessageService = async (
   message: string,
   ticketId: number,
   contact: Contact,
-  connection: any,
-  companyIdOld: number //Apenas para completar a quantidade de argumentos
+  connection: any
 ) => {
-
-  // Buscar o ticket para obter o companyId
-  const ticket = await Ticket.findOne({ where: { id: ticketId } });
-
-  if (!ticket) {
-    throw new Error("Ticket não encontrado");
-  }
-
-  const companyId = ticket.companyId; // Agora temos o companyId
-  
-  /*const notificameHubToken = await showHubToken();*/
-
-  const notificameHubToken = await showHubToken(companyId);
+  const notificameHubToken = await showHubToken();
 
   const client = new Client(notificameHubToken);
 
-  let channelClient;
+  let channelClient
 
   message = message.replace(/\n/g, " ");
 
   const content = new TextContent(message);
 
-  let contactNumber;
+  let contactNumber
 
   if(contact.messengerId && !contact.instagramId){
     contactNumber = contact.messengerId
@@ -47,13 +32,11 @@ export const SendTextMessageService = async (
   }
 
   try {
-
     console.log({
       token: connection.qrcode,
       number: contactNumber,
       content,
-      message,
-      companyId
+      message
     });
 
     let response = await channelClient.sendMessage(
@@ -74,53 +57,15 @@ export const SendTextMessageService = async (
       data = response;
     }
 
-const newMessage = await CreateMessageService({
-  id: data.id,
-  contactId: contact.id,
-  companyId,
-  body: message,
-  ticketId,
-  fromMe: true
-});
-
-await Ticket.update(
-  { lastMessage: message },
-  { where: { id: ticketId } }
-);
-
-const io = getIO();
-const updatedTicket = await Ticket.findByPk(ticketId, { include: ["contact"] });
-console.log("Ticket atualizado após envio do atendente:", updatedTicket);
-if (updatedTicket) {
-  io.to(updatedTicket.status)
-    .to(ticketId.toString())
-    .emit("message", {
-      action: "create",
-      message: newMessage,
-      ticket: updatedTicket
+    const newMessage = await CreateMessageService({
+      id: data.id,
+      contactId: contact.id,
+      body: message,
+      ticketId,
+      fromMe: true
     });
-  console.log("Evento 'message' emitido para envio:", {
-    status: updatedTicket.status,
-    ticketId: ticketId.toString(),
-    lastMessage: updatedTicket.lastMessage
-  });
 
- io.to(updatedTicket.status)
-  .to(ticketId.toString())
-  .emit(`company-${companyId}-ticket`, {
-    action: "update",
-    ticket: updatedTicket
-  });
-  console.log("Evento 'ticket' emitido para envio:", {
-    status: updatedTicket.status,
-    ticketId: ticketId.toString(),
-    lastMessage: updatedTicket.lastMessage
-  });
-}
-
-return newMessage;
-
-
+    return newMessage;
   } catch (error) {
     console.log("Error:", error);
   }

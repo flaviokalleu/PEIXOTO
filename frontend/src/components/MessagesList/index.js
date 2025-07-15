@@ -388,67 +388,48 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const reducer = (state, action) => {
-  console.log("🔧 [Frontend Reducer] Ação:", action.type, "Payload:", action.payload);
-  
   if (action.type === "LOAD_MESSAGES") {
     const messages = action.payload;
     const newMessages = [];
-    
-    console.log("📥 [Frontend Reducer] Carregando", messages.length, "mensagens");
 
     messages.forEach((message) => {
+
       const messageIndex = state.findIndex((m) => m.id === message.id);
       if (messageIndex !== -1) {
         state[messageIndex] = message;
-        console.log("📝 [Frontend Reducer] Mensagem atualizada:", message.id);
       } else {
         newMessages.push(message);
-        console.log("➕ [Frontend Reducer] Nova mensagem adicionada:", message.id);
       }
     });
 
-    const finalState = [...newMessages, ...state];
-    console.log("📊 [Frontend Reducer] Estado final:", finalState.length, "mensagens");
-    return finalState;
+    return [...newMessages, ...state];
   }
 
   if (action.type === "ADD_MESSAGE") {
     const newMessage = action.payload;
     const messageIndex = state.findIndex((m) => m.id === newMessage.id);
-    
-    console.log("➕ [Frontend Reducer] Adicionando mensagem:", newMessage.id);
 
     if (messageIndex !== -1) {
       state[messageIndex] = newMessage;
-      console.log("📝 [Frontend Reducer] Mensagem existente atualizada:", newMessage.id);
     } else {
       state.push(newMessage);
-      console.log("✅ [Frontend Reducer] Nova mensagem adicionada:", newMessage.id);
     }
 
-    const finalState = [...state];
-    console.log("📊 [Frontend Reducer] Estado após ADD_MESSAGE:", finalState.length, "mensagens");
-    return finalState;
+    return [...state];
   }
 
   if (action.type === "UPDATE_MESSAGE") {
     const messageToUpdate = action.payload;
     const messageIndex = state.findIndex((m) => m.id === messageToUpdate.id);
-    
-    console.log("📝 [Frontend Reducer] Atualizando mensagem:", messageToUpdate.id);
 
     if (messageIndex !== -1) {
       state[messageIndex] = messageToUpdate;
-      console.log("✅ [Frontend Reducer] Mensagem atualizada com sucesso");
-    } else {
-      console.log("❌ [Frontend Reducer] Mensagem não encontrada para atualização");
     }
 
     return [...state];
   }
 
   if (action.type === "RESET") {
-    console.log("🔄 [Frontend Reducer] Resetando estado");
     return [];
   }
 };
@@ -527,35 +508,8 @@ const MessagesList = ({
         }
         if (isNil(ticketId)) return;
         try {
-          console.log("🔄 [Frontend] Carregando mensagens da API para ticket:", ticketId);
-          console.log("🔄 [Frontend] Canal do ticket:", channel);
-          
-          let apiEndpoint = "/messages/" + ticketId;
-          let requestParams = { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) };
-          
-          // Se for canal do Hub (Instagram, Facebook, etc), usar rota específica
-          if (channel && channel !== "whatsapp") {
-            console.log("🌐 [Frontend] Usando rota Hub para canal:", channel);
-            apiEndpoint = "/hub-messages/" + ticketId;
-            requestParams = { pageNumber }; // Hub não usa selectedQueues
-          }
-          
-          const { data } = await api.get(apiEndpoint, {
-            params: requestParams,
-          });
-          
-          console.log("📦 [Frontend] Mensagens recebidas da API:", data.messages);
-          console.log("📊 [Frontend] Total de mensagens:", data.messages.length);
-          
-          // Log detalhado das mensagens para debug
-          data.messages.forEach((msg, index) => {
-            console.log(`   Mensagem ${index + 1}:`, {
-              id: msg.id,
-              body: msg.body?.substring(0, 50) + (msg.body?.length > 50 ? '...' : ''),
-              fromMe: msg.fromMe,
-              mediaType: msg.mediaType,
-              createdAt: msg.createdAt
-            });
+          const { data } = await api.get("/messages/" + ticketId, {
+            params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
           });
 
           if (currentTicketId.current === ticketId) {
@@ -564,6 +518,7 @@ const MessagesList = ({
             setLoading(false);
             setLoadingMore(false);
           }
+
           if (pageNumber === 1 && data.messages.length > 1) {
             scrollToBottom();
           }
@@ -573,6 +528,7 @@ const MessagesList = ({
           setLoadingMore(false);
         }
       };
+
       fetchMessages();
     }, 500);
     return () => {
@@ -589,38 +545,20 @@ const MessagesList = ({
 
     //    const socket = socketManager.GetSocket();
     const connectEventMessagesList = () => {
-      console.log("🔗 [Frontend] Conectando ao socket, joinChatBox:", ticketId);
       socket.emit("joinChatBox", `${ticketId}`);
     }
 
-    console.log("🎯 [Frontend] Configurando listeners do socket");
-    console.log("   - Evento:", `company-${companyId}-appMessage`);
-    console.log("   - CompanyId:", companyId);
-    console.log("   - TicketId:", ticketId);
-
     const onAppMessageMessagesList = (data) => {
-      console.log("🔥 [Frontend] Evento appMessage recebido:", data);
-      console.log("🔍 [Frontend] Verificando condições:");
-      console.log("   - data.action:", data.action);
-      console.log("   - data.ticket.uuid:", data.ticket?.uuid);
-      console.log("   - ticketId atual:", ticketId);
-      console.log("   - UUID match:", data.ticket?.uuid === ticketId);
-
       if (data.action === "create" && data.ticket.uuid === ticketId) {
-        console.log("✅ [Frontend] Adicionando mensagem:", data.message);
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
         scrollToBottom();
-      } else {
-        console.log("❌ [Frontend] Mensagem ignorada - condições não atendidas");
       }
 
       if (data.action === "update" && data?.message?.ticket?.uuid === ticketId) {
-        console.log("📝 [Frontend] Atualizando mensagem:", data.message);
         dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
       }
 
       if (data.action == "delete" && data.message.ticket?.uuid === ticketId) {
-        console.log("🗑️ [Frontend] Deletando mensagem:", data.messageId);
         dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
       }
     }

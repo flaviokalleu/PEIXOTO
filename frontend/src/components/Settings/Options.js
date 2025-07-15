@@ -8,10 +8,6 @@ import Select from "@material-ui/core/Select";
 import FormHelperText from "@material-ui/core/FormHelperText";
 
 import useSettings from "../../hooks/useSettings";
-import InputAdornment from "@material-ui/core/InputAdornment";
-import IconButton from "@material-ui/core/IconButton";
-import Visibility from "@material-ui/icons/Visibility";
-import VisibilityOff from "@material-ui/icons/VisibilityOff";
 import { ToastContainer, toast } from 'react-toastify';
 import { makeStyles } from "@material-ui/core/styles";
 import { grey, blue } from "@material-ui/core/colors";
@@ -70,10 +66,6 @@ const useStyles = makeStyles((theme) => ({
 export default function Options(props) {
   const { oldSettings, settings, scheduleTypeChanged, user } = props;
 
-  // Estado para mostrar/esconder o token do NotificaMeHub
-  const [showToken, setShowToken] = useState(false);
-  const toggleShowToken = () => setShowToken((prev) => !prev);
-
   const classes = useStyles();
   const [userRating, setUserRating] = useState("disabled");
   const [scheduleType, setScheduleType] = useState("disabled");
@@ -130,9 +122,6 @@ export default function Options(props) {
   const [stripeprivatekeyType, setstripeprivatekeyType] = useState('');
   const [loadingstripeprivatekeyType, setLoadingstripeprivatekeyType] =
     useState(false);
-  
-  const [HubNotificaMeType, setHubNotificaMeType] = useState("");
-  const [loadingHubNotificaMeType, setLoadingHubNotificaMeType] = useState(false);    
 
   const [asaastokenType, setasaastokenType] = useState('');
   const [loadingasaastokenType, setLoadingasaastokenType] = useState(false);
@@ -231,18 +220,6 @@ export default function Options(props) {
       if (eficlientidType) {
         setEfiClientidType(eficlientidType.value);
       }
-    
-    // Corrige erro: settings.find is not a function
-    let hubTokenValue = "";
-    if (Array.isArray(settings)) {
-      const HubNotificaMeType = settings.find((s) => s.key === "hubToken");
-      if (HubNotificaMeType) {
-        hubTokenValue = HubNotificaMeType.value;
-      }
-    } else if (settings && typeof settings === "object" && settings.hubToken !== undefined) {
-      hubTokenValue = settings.hubToken;
-    }
-    setHubNotificaMeType(hubTokenValue);
 
       const eficlientsecretType = oldSettings.find(
         (s) => s.key === 'eficlientsecret'
@@ -329,13 +306,7 @@ export default function Options(props) {
     });
     setLoadingdownloadLimit(false);
   }
-  async function handleChangeHubNotificaMe(value) {
-    setHubNotificaMeType(value);
-    setLoadingHubNotificaMeType(true);
-    await update({ column: "hubToken", data: value });
-    toast.success("Operação atualizada com sucesso.");
-    setLoadingHubNotificaMeType(false);
-  }
+
   async function handleChangeEfiClientid(value) {
     setEfiClientidType(value);
     setLoadingEfiClientidType(true);
@@ -416,14 +387,20 @@ export default function Options(props) {
   async function handleChangeUserRating(value) {
     setUserRating(value);
     setLoadingUserRating(true);
-    await update({ column: "userRating", data: value });
+    await update({
+      column: "userRating",
+      data: value
+    });
     setLoadingUserRating(false);
   }
 
   async function handleScheduleType(value) {
     setScheduleType(value);
     setLoadingScheduleType(true);
-    await update({ column: "scheduleType", data: value });
+    await update({
+      column: "scheduleType",
+      data: value
+    });
     setLoadingScheduleType(false);
     if (typeof scheduleTypeChanged === "function") {
       scheduleTypeChanged(value);
@@ -432,7 +409,10 @@ export default function Options(props) {
 
   async function handleChatBotType(value) {
     setChatBotType(value);
-    await update({ column: "chatBotType", data: value });
+    await update({
+      column: "chatBotType",
+      data: value
+    });
     if (typeof scheduleTypeChanged === "function") {
       setChatBotType(value);
     }
@@ -441,70 +421,100 @@ export default function Options(props) {
   async function handleLGPDMessage(value) {
     setLGPDMessage(value);
     setLoadingLGPDMessage(true);
-    await update({ column: "lgpdMessage", data: value });
+    await update({
+      column: "lgpdMessage",
+      data: value
+    });
     setLoadingLGPDMessage(false);
   }
 
   async function handletransferMessage(value) {
     setTransferMessage(value);
     setLoadingTransferMessage(true);
-    await update({ column: "transferMessage", data: value });
+    await update({
+      column: "transferMessage",
+      data: value
+    });
     setLoadingTransferMessage(false);
   }
 
   async function handleGreetingAcceptedMessage(value) {
     setGreetingAcceptedMessage(value);
     setLoadingGreetingAcceptedMessage(true);
-    await update({ column: "greetingAcceptedMessage", data: value });
+    await update({
+      column: "greetingAcceptedMessage",
+      data: value
+    });
     setLoadingGreetingAcceptedMessage(false);
   }
 
   async function handleAcceptCallWhatsappMessage(value) {
     setAcceptCallWhatsappMessage(value);
     setLoadingAcceptCallWhatsappMessage(true);
-    await update({ column: "AcceptCallWhatsappMessage", data: value });
+    await update({
+      column: "AcceptCallWhatsappMessage",
+      data: value
+    });
     setLoadingAcceptCallWhatsappMessage(false);
   }
 
   async function handlesendQueuePositionMessage(value) {
     setSendQueuePositionMessage(value);
     setLoadingSendQueuePositionMessage(true);
-    await update({ column: "sendQueuePositionMessage", data: value });
+    await update({
+      column: "sendQueuePositionMessage",
+      data: value
+    });
     setLoadingSendQueuePositionMessage(false);
   }
 
   async function handleShowNotificationPending(value) {
     setShowNotificationPending(value);
     setLoadingShowNotificationPending(true);
-    await update({ column: "showNotificationPending", data: value });
+    await update({
+      column: "showNotificationPending",
+      data: value
+    });
     setLoadingShowNotificationPending(false);
   }
 
   async function handleLGPDLink(value) {
     setLGPDLink(value);
     setLoadingLGPDLink(true);
-    await update({ column: "lgpdLink", data: value });
+    await update({
+      column: "lgpdLink",
+      data: value
+    });
     setLoadingLGPDLink(false);
   }
 
   async function handleLGPDDeleteMessage(value) {
     setLGPDDeleteMessage(value);
     setLoadingLGPDDeleteMessage(true);
-    await update({ column: "lgpdDeleteMessage", data: value });
+    await update({
+      column: "lgpdDeleteMessage",
+      data: value
+    });
     setLoadingLGPDDeleteMessage(false);
   }
 
   async function handleLGPDConsent(value) {
     setLGPDConsent(value);
     setLoadingLGPDConsent(true);
-    await update({ column: "lgpdConsent", data: value });
+    await update({
+      column: "lgpdConsent",
+      data: value
+    });
     setLoadingLGPDConsent(false);
   }
 
   async function handleLGPDHideNumber(value) {
     setLGPDHideNumber(value);
     setLoadingLGPDHideNumber(true);
-    await update({ column: "lgpdHideNumber", data: value });
+    await update({
+      column: "lgpdHideNumber",
+      data: value
+    });
     setLoadingLGPDHideNumber(false);
   }
 
@@ -875,50 +885,6 @@ export default function Options(props) {
             </FormHelperText>
           </FormControl>
         </Grid>
-    {/*-----------------HUB NOTIFICAME-----------------*/}
-      <Grid spacing={3} container
-        style={{ marginBottom: 10 }}>
-        <Tabs
-          indicatorColor="primary"
-          textColor="primary"
-          scrollButtons="on"
-          variant="scrollable"
-          className={classes.tab}
-        >
-          <Tab label="HUB NOTIFICAME" />
-
-        </Tabs>
-        <Grid xs={12} sm={12} md={12} item>
-          <FormControl className={classes.selectContainer}>
-            <TextField
-              id="HubNotificaMe"
-              name="HubNotificaMe"
-              margin="dense"
-              label="Token Account"
-              variant="outlined"
-              value={HubNotificaMeType}
-              type={showToken ? "text" : "password"}
-              onChange={async (e) => {
-                handleChangeHubNotificaMe(e.target.value);
-              }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={toggleShowToken} edge="end">
-                      {showToken ? <VisibilityOff /> : <Visibility />}
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            >
-
-            </TextField>
-            <FormHelperText>
-              {loadingHubNotificaMeType && "Atualizando..."}
-            </FormHelperText>
-          </FormControl>
-        </Grid>
-      </Grid>
 
         {/* HABILITAR PARA O ATENDENTE RETIRAR O ASSINATURA */}
         <Grid xs={12} sm={6} md={4} item>

@@ -410,14 +410,24 @@ export const remove = async (
         action: "delete",
         whatsappId: +whatsappId
       });
+
   }
 
   if (whatsapp.channel === "facebook" || whatsapp.channel === "instagram") {
     const { facebookUserToken } = whatsapp;
+
     const getAllSameToken = await Whatsapp.findAll({
-      where: { facebookUserToken }
+      where: {
+        facebookUserToken
+      }
     });
-    await Whatsapp.destroy({ where: { facebookUserToken } });
+
+    await Whatsapp.destroy({
+      where: {
+        facebookUserToken
+      }
+    });
+
     for await (const whatsapp of getAllSameToken) {
       io.of(String(companyId))
         .emit(`company-${companyId}-whatsapp`, {
@@ -425,14 +435,7 @@ export const remove = async (
           whatsappId: whatsapp.id
         });
     }
-  }
-  if (whatsapp.channel === "hub") {
-    await Whatsapp.destroy({ where: { id: whatsapp.id } });
-    io.of(String(companyId))
-      .emit(`company-${companyId}-whatsapp`, {
-        action: "delete",
-        whatsappId: whatsapp.id
-      });
+
   }
 
   return res.status(200).json({ message: "Session disconnected." });
@@ -517,12 +520,25 @@ export const removeAdmin = async (
         action: "delete",
         whatsappId: +whatsappId
       });
+
   }
 
   if (whatsapp.channel === "facebook" || whatsapp.channel === "instagram") {
     const { facebookUserToken } = whatsapp;
-    const getAllSameToken = await Whatsapp.findAll({ where: { facebookUserToken } });
-    await Whatsapp.destroy({ where: { facebookUserToken } });
+
+    const getAllSameToken = await Whatsapp.findAll({
+
+      where: {
+        facebookUserToken
+      }
+    });
+
+    await Whatsapp.destroy({
+      where: {
+        facebookUserToken
+      }
+    });
+
     for await (const whatsapp of getAllSameToken) {
       io.of(String(companyId))
         .emit(`company-${companyId}-whatsapp`, {
@@ -530,14 +546,7 @@ export const removeAdmin = async (
           whatsappId: whatsapp.id
         });
     }
-  }
-  if (whatsapp.channel === "hub") {
-    await Whatsapp.destroy({ where: { id: whatsapp.id } });
-    io.of(String(companyId))
-      .emit(`company-${companyId}-whatsapp`, {
-        action: "delete",
-        whatsappId: whatsapp.id
-      });
+
   }
 
   return res.status(200).json({ message: "Session disconnected." });

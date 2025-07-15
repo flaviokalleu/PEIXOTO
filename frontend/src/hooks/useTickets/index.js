@@ -31,28 +31,24 @@ const useTickets = ({
     const delayDebounceFn = setTimeout(() => {
       const fetchTickets = async () => {
         if (userFilter === undefined || userFilter === null) {
-          try {
-            // Build params object and only include 'whatsapps' if whatsappIds is non-empty
-            const params = {
-              searchParam,
-              pageNumber,
-              tags,
-              users,
-              status,
-              date,
-              updatedAt,
-              showAll,
-              queueIds,
-              withUnreadMessages,
-              statusFilter,
-              sortTickets,
-              searchOnMessages
-            };
-            if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
-              params.whatsapps = whatsappIds;
-            }
+          try {            
             const { data } = await api.get("/tickets", {
-              params
+              params: {
+                searchParam,
+                pageNumber,
+                tags,
+                users,
+                status,
+                date,
+                updatedAt,
+                showAll,
+                queueIds,
+                withUnreadMessages,
+                whatsapps: whatsappIds,
+                statusFilter,
+                sortTickets,
+                searchOnMessages
+              },
             });
             
             let tickets = [];

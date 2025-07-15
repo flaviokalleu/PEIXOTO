@@ -1,7 +1,6 @@
 import Whatsapp from "../models/Whatsapp";
 import { IChannel } from "../controllers/ChannelHubController";
 import { showHubToken } from "./showHubToken";
-import logger  from "../utils/logger";
 const {
   Client,
   MessageSubscription
@@ -12,44 +11,43 @@ export const setChannelWebhook = async (
   whatsapp: IChannel | any,
   whatsappId: string
 ) => {
-  try {
-    const notificameHubToken = await showHubToken(whatsapp.companyId);
+  const notificameHubToken = await showHubToken();
 
-    if (!notificameHubToken) {
-      logger.warn(`Não foi possível configurar o webhook para o canal ${whatsapp.qrcode} - Token não encontrado`);
-      return;
+  const client = new Client(notificameHubToken);
+
+  
+  /* USAR EM TESTE */
+  //const url = `https://0513-201-75-90-49.ngrok-free.app/hub-webhook/${whatsapp.qrcode}`;
+
+  /* USAR EM PRODUÇÃO */
+  const url = `${process.env.BACKEND_URL}/hub-webhook/${whatsapp.qrcode}`;
+
+  const subscription = new MessageSubscription(
+    {
+      url
+    },
+    {
+      channel: whatsapp.qrcode
     }
+  );
 
-    const client = new Client(notificameHubToken);
+  client
+    .createSubscription(subscription)
+    .then((response: any) => {
+      console.log("Webhook subscribed:", response);
+    })
+    .catch((error: any) => {
+      console.log("Error:", error);
+    });
 
-    logger.info(`[LOG] setChannelWebhook chamado para companyId: ${whatsapp.companyId}`);
-
-    const url = `${process.env.BACKEND_URL}/hub-webhook/${whatsapp.qrcode}`;
-
-    const subscription = new MessageSubscription(
-      {
-        url
-      },
-      {
-        channel: whatsapp.qrcode
+  await Whatsapp.update(
+    {
+      status: "CONNECTED"
+    },
+    {
+      where: {
+        id: whatsappId
       }
-    );
-
-    await client.createSubscription(subscription);
-    logger.info(`Webhook configurado com sucesso para o canal ${whatsapp.qrcode}`);
-
-    await Whatsapp.update(
-      {
-        status: "CONNECTED"
-      },
-      {
-        where: {
-          id: whatsappId
-        }
-      }
-    );
-  } catch (err) {
-    logger.error(`Erro ao configurar webhook: ${err.message}`);
-    throw err;
-  }
+    }
+  );
 };

@@ -38,8 +38,8 @@ const FindOrCreateTicketService = async (
   // let isCreated = false;
 
   let openAsLGPD = false
-  // Corrige erro para quando settings está undefined (ex: tickets do hub)
-  if (settings && settings.enableLGPD) { //adicionar lgpdMessage
+  if (settings.enableLGPD) { //adicionar lgpdMessage
+
     openAsLGPD = !isCampaign &&
       !isTransfered &&
       settings.enableLGPD === "enabled" &&
@@ -47,9 +47,6 @@ const FindOrCreateTicketService = async (
       (settings.lgpdConsent === "enabled" ||
         (settings.lgpdConsent === "disabled" && isNil(contact?.lgpdAcceptedAt)))
   }
-
-  // Garante que settings existe para evitar erro em outros pontos
-  settings = settings || {};
 
   const io = getIO();
 
@@ -137,26 +134,20 @@ const FindOrCreateTicketService = async (
     const ticketData: any = {
       contactId: groupContact ? groupContact.id : contact.id,
       status: (!isImported && !isNil(settings.enableLGPD)
-        && openAsLGPD && !groupContact) ?
-        "lgpd" :
-        (whatsapp && whatsapp.groupAsTicket === "enabled" || !groupContact) ?
-          "pending" :
-          "group",
+        && openAsLGPD && !groupContact) ? //verifica se lgpd está habilitada e não é grupo e se tem a mensagem e link da política
+        "lgpd" :  //abre como LGPD caso habilitado parâmetro
+        (whatsapp.groupAsTicket === "enabled" || !groupContact) ? // se lgpd estiver desabilitado, verifica se é para tratar ticket como grupo ou se é contato normal
+          "pending" : //caso  é para tratar grupo como ticket ou não é grupo, abre como pendente
+          "group", // se não é para tratar grupo como ticket, vai direto para grupos
       isGroup: !!groupContact,
       unreadMessages,
+      whatsappId: whatsapp.id,
       companyId,
       isBot: groupContact ? false : true,
+      channel,
       imported: isImported ? new Date() : null,
       isActiveDemand: false,
     };
-    // Se for WhatsApp, define whatsappId e channel
-    if (channel === "whatsapp" && whatsapp) {
-      ticketData.whatsappId = whatsapp.id;
-      ticketData.channel = "whatsapp";
-    } else if (channel) {
-      ticketData.whatsappId = null;
-      ticketData.channel = channel;
-    }
 
     if (DirectTicketsToWallets && contact.id) {
       const wallet: any = contact;

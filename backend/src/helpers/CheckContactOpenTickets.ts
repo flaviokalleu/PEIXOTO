@@ -1,12 +1,10 @@
 import { Op } from "sequelize";
 import AppError from "../errors/AppError";
 import Ticket from "../models/Ticket";
+import User from "../models/User";
+import Queue from "../models/Queue";
 
-const CheckContactOpenTickets = async (
-  contactId: number | string,
-  whatsappId: number | string,
-  companyId: number | string
-): Promise<void> => {
+const CheckContactOpenTickets = async (contactId, whatsappId, companyId): Promise<void> => {
   const ticket = await Ticket.findOne({
     where: { contactId, whatsappId, companyId, status: { [Op.or]: ["open", "pending"] } }
   });

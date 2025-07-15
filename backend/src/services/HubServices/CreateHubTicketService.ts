@@ -4,49 +4,44 @@ import Ticket from "../../models/Ticket";
 import User from "../../models/User";
 import Whatsapp from "../../models/Whatsapp";
 import ShowContactService from "../ContactServices/ShowContactService";
-import { getIO } from "../../libs/socket";
 
 interface Request {
   contactId: number;
   status: string;
   userId: number;
-  companyId: number;
   queueId?: number;
   channel: string;
+  companyId: number;
 }
 
 const CreateTicketService = async ({
   contactId,
   status,
   userId,
-  companyId,
   queueId,
-  channel
+  channel,
+  companyId
 }: Request): Promise<Ticket> => {
-
   let connectionType;
 
-if (channel === 'instagram') {
-  connectionType = 'instagram';
-} else if (channel === 'facebook') {
-  connectionType = 'facebook';
-}
+  if (channel === 'instagram' || channel === 'facebook') {
+    connectionType = 'facebook';
+  }
+
+  console.log('channel', channel);
+  console.log('connectionType', connectionType);
 
   const connection = await Whatsapp.findOne({
-    where: { type: connectionType! }
+    where: { type: connectionType },
+    attributes: ['id', 'companyId']
   });
 
   if (!connection) {
     throw new Error("Connection id not found");
   }
 
-  // Verificação do companyId recebido
-  console.log("companyId recebido:", companyId);
+  await CheckContactOpenTickets(contactId, connection.id, companyId);
 
-
-  await CheckContactOpenTickets(contactId, String(connection.id), companyId);
-
-  // Obtendo as informações do contato com base no companyId do usuário
   const { isGroup } = await ShowContactService(contactId, companyId);
 
   if (queueId === undefined) {
@@ -54,15 +49,13 @@ if (channel === 'instagram') {
     queueId = user?.queues.length === 1 ? user.queues[0].id : undefined;
   }
 
-  // Criando um novo ticket com o companyId associado
   const newTicket = await Ticket.create({
     status,
-    //lastMessage: null,
-    lastMessage: null,  // Adicionando a última mensagem
+    lastMessage: null,
     contactId,
     isGroup,
     whatsappId: connection.id,
-    companyId  // Passando o companyId para garantir que o ticket pertença à empresa do usuário
+    companyId
   });
 
   const ticket = await Ticket.findByPk(newTicket.id, { include: ["contact"] });
@@ -70,8 +63,6 @@ if (channel === 'instagram') {
   if (!ticket) {
     throw new AppError("ERR_CREATING_TICKET");
   }
-
-  const io = getIO();
 
   return ticket;
 };

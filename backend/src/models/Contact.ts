@@ -64,6 +64,7 @@ class Contact extends Model<Contact> {
   @Column
   active: boolean;
 
+  @Default("whatsapp")
   @Column
   channel: string;
 

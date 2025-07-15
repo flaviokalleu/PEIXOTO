@@ -7,15 +7,14 @@ interface HubContact {
   lastName: string;
   picture: string;
   from: string;
-  whatsapp?: Whatsapp | null;  // Definindo como opcional e podendo ser null
+  whatsapp?: Whatsapp;
   channel: string;
-  companyId: number;
 }
 
 const FindOrCreateContactService = async (
   contact: HubContact
 ): Promise<Contact> => {
-  const { name, picture, firstName, lastName, from, channel, companyId, whatsapp } = contact;
+  const { name, picture, firstName, lastName, from, channel } = contact;
 
   console.log('contact', contact)
   let numberFb
@@ -40,27 +39,17 @@ const FindOrCreateContactService = async (
     });
   }
 
-  // Se o contato já existir, apenas atualizamos as informações
   if (contactExists) {
-    await contactExists.update({
-      name: name || firstName || 'Name Unavailable',
-      firstName,
-      lastName,
-      profilePicUrl: picture,
-      whatsappId: whatsapp ? whatsapp.id : null  // Verificando se o whatsapp é passado corretamente
-    });
+    await contactExists.update({ name: name || firstName || 'Name Unavailable' , firstName, lastName, profilePicUrl: picture })
     return contactExists;
   }
 
-  // Se o contato não existir, criamos um novo
   const newContact = await Contact.create({
     name: name || firstName || 'Name Unavailable',
-    number: null,  // Como você está criando o contato via Instagram ou Facebook, número pode ser null
+    number: null,
     profilePicUrl: picture,
     messengerId: numberFb || null,
-    instagramId: numberIg || null,
-    companyId: companyId,
-    whatsappId: whatsapp ? whatsapp.id : null // Atribuindo whatsappId ao novo contato, se disponível
+    instagramId: numberIg || null
   });
 
   return newContact;

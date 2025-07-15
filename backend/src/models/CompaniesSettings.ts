@@ -125,10 +125,6 @@ import {
 
     @Column
     showNotificationPending: boolean;
-
-    // Adicionado para integração com Hub NotificaMe
-    @Column
-    hubToken: string;
   }
   
   export default CompaniesSettings;
