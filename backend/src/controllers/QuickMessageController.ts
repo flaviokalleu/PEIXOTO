@@ -165,18 +165,29 @@ export const mediaUpload = async (
   const { id } = req.params;
   const files = req.files as Express.Multer.File[];
   const file = head(files);
+  const { companyId } = req.user;
 
   try {
+    // Garante que a pasta existe
+    const dir = path.resolve("public", `company${companyId}`, "quickMessage");
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    // Gera nome único para evitar conflitos
+    const ext = path.extname(file.originalname);
+    const uniqueName = `${Date.now()}_${Math.round(Math.random()*1e9)}${ext}`;
+    const destPath = path.join(dir, uniqueName);
+    fs.renameSync(file.path, destPath);
+
     const quickmessage = await QuickMessage.findByPk(id);
-    
-    await quickmessage.update ({
-      mediaPath: file.filename,
+    await quickmessage.update({
+      mediaPath: uniqueName,
       mediaName: file.originalname
     });
 
     return res.send({ mensagem: "Arquivo Anexado" });
-    } catch (err: any) {
-      throw new AppError(err.message);
+  } catch (err: any) {
+    throw new AppError(err.message);
   }
 };
 
@@ -189,18 +200,17 @@ export const deleteMedia = async (
 
   try {
     const quickmessage = await QuickMessage.findByPk(id);
-    const filePath = path.resolve("public", `company${companyId}`,"quickMessage",quickmessage.mediaName);
-    const fileExists = fs.existsSync(filePath);
-    if (fileExists) {
+    // mediaPath agora tem o caminho relativo
+    const filePath = path.resolve("public", `company${companyId}`, "quickMessage", quickmessage.mediaPath || "");
+    if (fs.existsSync(filePath)) {
       fs.unlinkSync(filePath);
     }
-    await quickmessage.update ({
+    await quickmessage.update({
       mediaPath: null,
       mediaName: null
     });
-
     return res.send({ mensagem: "Arquivo Excluído" });
-    } catch (err: any) {
-      throw new AppError(err.message);
+  } catch (err: any) {
+    throw new AppError(err.message);
   }
 };
