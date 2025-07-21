@@ -160,6 +160,11 @@ const VerifyCurrentSchedule = async (companyId?: number, queueId?: number, whats
       plain: true
     });
 
+    // LOG DETALHADO PARA DEBUG
+    console.log('[VerifyCurrentSchedule] SQL:', sql);
+    console.log('[VerifyCurrentSchedule] replacements:', { queueId, companyId });
+    console.log('[VerifyCurrentSchedule] result:', result);
+
     return result;
   }
 };

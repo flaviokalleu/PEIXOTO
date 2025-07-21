@@ -130,6 +130,12 @@ class Message extends Model<Message> {
   @Default(false)
   @Column
   isForwarded: boolean;
+
+  @Column(DataType.TEXT)
+  statusReply: string;
+
+  @Column(DataType.TEXT)
+  statusId: string;
 }
 
 export default Message;

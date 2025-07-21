@@ -18,36 +18,36 @@ export const forgotPassword = async (req: Request, res: Response): Promise<Respo
 
   const user = await User.findOne({ where: { email } });
   if (!user) {
-    console.warn('No user found for email:', email);
-    throw new AppError("E-mail não encontrado.", 404);
+	console.warn('No user found for email:', email);
+	throw new AppError("E-mail não encontrado.", 404);
   }
 
   const token = crypto.randomBytes(32).toString("hex");
   const resetUrl = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
 
-  user.passwordResetToken = token;
-  user.passwordResetExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+  user.resetToken = token;
+  user.resetTokenExpiry = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
   await user.save();
 
   console.log('Password reset token generated:', {
-    userId: user.id,
-    email,
-    token,
-    expires: user.passwordResetExpires,
+	userId: user.id,
+	email,
+	token,
+	expires: user.resetTokenExpiry,
   });
 
   const transporter = nodemailer.createTransport({
-    host: process.env.MAIL_HOST,
-    port: Number(process.env.MAIL_PORT) || 465,
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.MAIL_USER,
-      pass: process.env.MAIL_PASS,
-    },
+	host: process.env.MAIL_HOST,
+	port: Number(process.env.MAIL_PORT) || 465,
+	secure: process.env.SMTP_SECURE === 'true',
+	auth: {
+	  user: process.env.MAIL_USER,
+	  pass: process.env.MAIL_PASS,
+	},
   });
 
   const htmlContent = `
-    <!DOCTYPE html>
+	<!DOCTYPE html>
 <html xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" lang="en">
 
 <head>
@@ -333,17 +333,17 @@ export const forgotPassword = async (req: Request, res: Response): Promise<Respo
   `;
 
   try {
-    await transporter.sendMail({
-      from: process.env.SMTP_FROM || process.env.MAIL_USER,
-      to: email,
-      subject: "Redefinição de Senha",
-      text: `Clique no link para redefinir sua senha: ${resetUrl}\n\nSe você não solicitou a redefinição, ignore este e-mail.`,
-      html: htmlContent,
-    });
-    console.log('Password reset email sent to:', email);
+	await transporter.sendMail({
+	  from: process.env.SMTP_FROM || process.env.MAIL_USER,
+	  to: email,
+	  subject: "Redefinição de Senha",
+	  text: `Clique no link para redefinir sua senha: ${resetUrl}\n\nSe você não solicitou a redefinição, ignore este e-mail.`,
+	  html: htmlContent,
+	});
+	console.log('Password reset email sent to:', email);
   } catch (error) {
-    console.error('Failed to send password reset email:', error);
-    throw new AppError("Erro ao enviar e-mail de redefinição.", 500);
+	console.error('Failed to send password reset email:', error);
+	throw new AppError("Erro ao enviar e-mail de redefinição.", 500);
   }
 
   return res.status(200).json({ message: "E-mail enviado com sucesso." });
@@ -353,8 +353,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const { email, password } = req.body;
 
   const { token, serializedUser, refreshToken } = await AuthUserService({
-    email,
-    password
+	email,
+	password
   });
 
   SendRefreshToken(res, refreshToken);
@@ -362,19 +362,19 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const io = getIO();
 
   io.of(serializedUser.companyId.toString())
-    .emit(`company-${serializedUser.companyId}-auth`, {
-      action: "update",
-      user: {
-        id: serializedUser.id,
-        email: serializedUser.email,
-        companyId: serializedUser.companyId,
-        token: serializedUser.token
-      }
-    });
+	.emit(`company-${serializedUser.companyId}-auth`, {
+	  action: "update",
+	  user: {
+		id: serializedUser.id,
+		email: serializedUser.email,
+		companyId: serializedUser.companyId,
+		token: serializedUser.token
+	  }
+	});
 
   return res.status(200).json({
-    token,
-    user: serializedUser
+	token,
+	user: serializedUser
   });
 };
 
@@ -385,12 +385,12 @@ export const update = async (
   const token: string = req.cookies.jrt;
 
   if (!token) {
-    throw new AppError("ERR_SESSION_EXPIRED", 401);
+	throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
 
   const { user, newToken, refreshToken } = await RefreshTokenService(
-    res,
-    token
+	res,
+	token
   );
 
   SendRefreshToken(res, refreshToken);
@@ -404,7 +404,7 @@ export const me = async (req: Request, res: Response): Promise<Response> => {
   const { id, profile, super: superAdmin } = user;
 
   if (!token) {
-    throw new AppError("ERR_SESSION_EXPIRED", 401);
+	throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
 
   return res.json({ id, profile, super: superAdmin });
@@ -416,8 +416,8 @@ export const remove = async (
 ): Promise<Response> => {
   const { id } = req.user;
   if (id) {
-    const user = await User.findByPk(id);
-    await user.update({ online: false });
+	const user = await User.findByPk(id);
+	await user.update({ online: false });
   }
   res.clearCookie("jrt");
 
@@ -430,32 +430,32 @@ export const resetPassword = async (req: Request, res: Response): Promise<Respon
   console.log('Reset password request received:', { token, newPassword: '***' }); // Hide password in logs
 
   const user = await User.findOne({
-    where: {
-      passwordResetToken: token,
-      passwordResetExpires: { [Op.gt]: new Date() },
-    },
+	where: {
+	  resetToken: token,
+	  resetTokenExpiry: { [Op.gt]: new Date() },
+	},
   });
 
   if (!user) {
-    console.warn('No user found for token:', token);
-    // Check if token exists but is expired or invalid
-    const userWithToken = await User.findOne({
-      where: { passwordResetToken: token },
-    });
-    if (userWithToken) {
-      console.warn('Token found but expired or invalid:', {
-        token,
-        expires: userWithToken.passwordResetExpires,
-      });
-    }
-    throw new AppError("Token inválido ou expirado.", 400);
+	console.warn('No user found for token:', token);
+	// Check if token exists but is expired or invalid
+	const userWithToken = await User.findOne({
+	  where: { resetToken: token },
+	});
+	if (userWithToken) {
+	  console.warn('Token found but expired or invalid:', {
+		token,
+		expires: userWithToken.resetTokenExpiry,
+	  });
+	}
+	throw new AppError("Token inválido ou expirado.", 400);
   }
 
   console.log('User found for password reset:', { userId: user.id, email: user.email });
 
   user.password = newPassword;
-  user.passwordResetToken = null;
-  user.passwordResetExpires = null;
+  user.resetToken = null;
+  user.resetTokenExpiry = null;
   await user.save();
 
   console.log('Password reset successful for user:', user.id);

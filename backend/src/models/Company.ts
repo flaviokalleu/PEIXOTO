@@ -9,7 +9,8 @@ import {
   ForeignKey,
   BelongsTo,
   DataType,
-  HasMany
+  HasMany,
+  Default
 } from "sequelize-typescript";
 import Contact from "./Contact";
 import Message from "./Message";
@@ -63,6 +64,10 @@ class Company extends Model<Company> {
     type: DataType.JSONB
   })
   schedules: [];
+
+  @Default("")
+  @Column(DataType.TEXT)
+  outOfHoursMessage: string;
 
   @ForeignKey(() => Plan)
   @Column

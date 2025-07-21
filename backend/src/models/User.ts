@@ -25,8 +25,38 @@ import QuickMessage from "./QuickMessage";
 import Whatsapp from "./Whatsapp";
 import Chatbot from "./Chatbot";
 
+export interface UserAttributes {
+  id: number;
+  name: string;
+  email: string;
+  passwordHash: string;
+  tokenVersion: number;
+  profile: string;
+  super: boolean;
+  online: boolean;
+  lastLogin: Date;
+  lastLogout: Date;
+  startWork: string;
+  endWork: string;
+  acceptAudioMessage: boolean;
+  allHistoric: string;
+  allUserChat: string;
+  userClosePendingTicket: string;
+  showDashboard: string;
+  defaultTicketsManagerWidth: number;
+  allowGroup: boolean;
+  allTicket: string;
+  defaultMenu: string;
+  farewellMessage: string;
+  isOnline: boolean;
+  companyId: number;
+  profileImage: string;
+  resetToken?: string;          // Adicionar
+  resetTokenExpiry?: Date;      // Adicionar
+}
+
 @Table
-class User extends Model<User> {
+class User extends Model<UserAttributes> {
   @PrimaryKey
   @AutoIncrement
   @Column
@@ -55,14 +85,14 @@ class User extends Model<User> {
   @Default(null)
   @Column
   profileImage: string;
-
+  
   @ForeignKey(() => Whatsapp)
   @Column
   whatsappId: number;
 
   @BelongsTo(() => Whatsapp)
   whatsapp: Whatsapp;
-
+  
   @Column
   super: boolean;
 
@@ -174,18 +204,15 @@ class User extends Model<User> {
   @Column
   allowConnections: string;
 
-  @Default("pt-BR")
-  @Column(DataType.STRING)
-  language: string;
+  @Column
+  resetToken: string;
 
-  @Column(DataType.STRING(64)) // Added for password reset token
-  passwordResetToken: string | null;
-
-  @Column(DataType.DATE) // Added for password reset expiration
-  passwordResetExpires: Date | null;
+  @Column
+  resetTokenExpiry: Date;
 
   @BeforeDestroy
   static async updateChatbotsUsersReferences(user: User) {
+    // Atualizar os registros na tabela Chatbots onde optQueueId é igual ao ID da fila que será excluída
     await Chatbot.update({ optUserId: null }, { where: { optUserId: user.id } });
   }
 }

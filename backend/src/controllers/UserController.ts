@@ -496,7 +496,7 @@ export const updateLanguage = async (req: Request, res: Response): Promise<Respo
     }
 
     await user.update({ language });
-    return res.status(200).json({ id: user.id, language: user.language });
+    return res.status(200).json({ id: user.id });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }

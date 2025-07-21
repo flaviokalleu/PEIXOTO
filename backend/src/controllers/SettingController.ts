@@ -184,3 +184,20 @@ export const storePrivateFile = async (req: Request, res: Response): Promise<Res
   
   return res.status(200).json(setting.value);
 }
+export const checkTranscriptionKey = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { companyId } = req.user;
+    
+    const transcriptionSetting = await ListSettingsServiceOne({
+      companyId,
+      key: "openaikeyaudio"
+    });
+
+    const hasKey = !!(transcriptionSetting?.value && transcriptionSetting.value.length > 0);
+    
+    return res.status(200).json({ hasKey });
+  } catch (err) {
+    console.error("Erro ao verificar chave de transcrição:", err);
+    return res.status(200).json({ hasKey: false });
+  }
+};
