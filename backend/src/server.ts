@@ -49,15 +49,13 @@ async function startServer() {
 process.on("uncaughtException", (err) => {
   logger.error(`${new Date().toUTCString()} uncaughtException: ${err.message}`);
   logger.error(err.stack);
-  
-  process.kill(process.pid, 'SIGTERM'); // Force immediate termination
+  // Ignora o erro e continua rodando
 });
 
 // Error handling for unhandled promise rejections
 process.on("unhandledRejection", (reason, p) => {
   logger.error(`${new Date().toUTCString()} unhandledRejection: ${reason}`);
-  
-  process.kill(process.pid, 'SIGTERM'); // Force immediate termination
+  // Ignora o erro e continua rodando
 });
 
 // Start the server
