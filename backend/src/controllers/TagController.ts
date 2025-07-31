@@ -142,6 +142,15 @@ export const syncTags = async (
   const data = req.body;
   const { companyId } = req.user;
 
+  // Validar se os dados necessários estão presentes
+  if (!data.contactId) {
+    throw new AppError("contactId is required", 400);
+  }
+
+  if (!data.tags || !Array.isArray(data.tags)) {
+    throw new AppError("tags must be an array", 400);
+  }
+
   const tags = await SyncTagService({ ...data, companyId });
 
   return res.json(tags);
@@ -153,6 +162,15 @@ export const removeContactTag = async (
 ): Promise<Response> => {
   const { tagId, contactId } = req.params;
   const { companyId } = req.user;
+
+  // Validar se os parâmetros são válidos
+  if (!tagId) {
+    throw new AppError("tagId is required", 400);
+  }
+
+  if (!contactId) {
+    throw new AppError("contactId is required", 400);
+  }
 
   console.log(tagId, contactId)
 

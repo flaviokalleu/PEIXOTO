@@ -226,7 +226,13 @@ const ListTicketsService = async ({
             };
           }
 
-  if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {
+  // Verifica se o usuário tem permissão para ver todos os tickets
+  const canShowAll = showAll === "true" && 
+    user.profile === "admin" && 
+    user.allUserChat === "enabled" && 
+    user.allHistoric === "enabled";
+
+  if (canShowAll && status !== "search") {
     if (user.allHistoric === "enabled" && showTicketWithoutQueue) {
       whereCondition = { companyId };
     } else if (user.allHistoric === "enabled" && !showTicketWithoutQueue) {
@@ -242,7 +248,7 @@ const ListTicketsService = async ({
   if (status && status !== "search") {
     whereCondition = {
       ...whereCondition,
-      status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
+      status: canShowAll && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
     };
   }
 
@@ -256,7 +262,7 @@ const ListTicketsService = async ({
         status: "closed",
       }
 
-      if (showAll === "false" && user.profile === "admin") {
+      if (user.profile !== "admin" || showAll === "false") {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
@@ -265,7 +271,7 @@ const ListTicketsService = async ({
       } else {
         whereCondition2 = {
           ...whereCondition2,
-          queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+          queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
         }
       }
 
@@ -281,7 +287,7 @@ const ListTicketsService = async ({
         status: "closed",
       }
 
-      if (showAll === "false" && (user.profile === "admin" || user.allUserChat === "enabled")) {
+      if (user.profile !== "admin" || showAll === "false") {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
@@ -290,7 +296,7 @@ const ListTicketsService = async ({
       } else {
         whereCondition2 = {
           ...whereCondition2,
-          queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+          queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
         }
       }
 
@@ -320,7 +326,7 @@ const ListTicketsService = async ({
           attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
           where: {
             [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
-            queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+            queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
             companyId
           },
           group: ['companyId', 'contactId', 'whatsappId'],
@@ -331,7 +337,7 @@ const ListTicketsService = async ({
           [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }]
         }
 
-        if (showAll === "false" && user.profile === "admin") {
+        if (user.profile !== "admin" || showAll === "false") {
           whereCondition2 = {
             ...whereCondition2,
             queueId: queueIds,
@@ -339,7 +345,7 @@ const ListTicketsService = async ({
             // [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
           }
 
-        } else if (showAll === "true" && user.profile === "admin") {
+        } else if (canShowAll) {
           whereCondition2 = {
             companyId,
             queueId: { [Op.or]: [queueIds, null] },
@@ -520,13 +526,27 @@ const ListTicketsService = async ({
           ]
         };
 
-        if (status === "group" && (user.allowGroup || showAll === "true")) {
+        if (status === "group" && (user.allowGroup || canShowAll)) {
           whereCondition = {
             ...whereCondition,
             queueId: { [Op.or]: [userQueueIds, null] },
           };
         }
       }
+
+  // Aplicar filtro de usuário se não for admin com permissão total
+  if (!canShowAll) {
+    whereCondition = {
+      ...whereCondition,
+      [Op.or]: [
+        { userId: userId },
+        { 
+          status: ["pending", "group"],
+          queueId: { [Op.in]: userQueueIds }
+        }
+      ]
+    };
+  }
 
   whereCondition = {
     ...whereCondition,

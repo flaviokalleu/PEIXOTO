@@ -680,10 +680,22 @@ const UpdateTicketService = async ({
 
     status = queue && queue.closeTicket ? "closed" : status;
 
+    // Quando um usuário assume o atendimento, o bot deve ser desabilitado
+    if (userId && oldUserId !== userId) {
+      isBot = false;
+      // Limpa dados de fluxo quando usuário assume
+      await ticket.update({
+        flowStopped: null,
+        lastFlowId: null,
+        dataWebhook: null,
+        apiConfig: null
+      });
+    }
+
     await ticket.update({
       status,
       queueId,
-      userId,
+      userId: (status === "closed" && !userId) ? ticket.userId : userId,
       isBot,
       queueOptionId,
       amountUsedBotQueues: status === "closed" ? 0 : amountUsedBotQueues ? amountUsedBotQueues : ticket.amountUsedBotQueues,

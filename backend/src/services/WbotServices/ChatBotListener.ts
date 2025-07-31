@@ -676,11 +676,17 @@ export const sayChatbot = async (
   msg: proto.IWebMessageInfo,
   ticketTraking: TicketTraking
 ): Promise<any> => {
-  // console.log("LINHA 718")
-  // const selectedOption =
-  //   msg?.message?.buttonsResponseMessage?.selectedButtonId ||
-  //   msg?.message?.listResponseMessage?.singleSelectReply.selectedRowId ||
-  //   getBodyMessage(msg);
+  // Verificação crítica: se há usuário atribuído, não aciona o chatbot
+  if (ticket.userId) {
+    console.log(`[CHATBOT] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando chatbot`);
+    return;
+  }
+
+  // Verificação adicional: se o ticket não está marcado como bot, não aciona
+  if (!ticket.isBot) {
+    console.log(`[CHATBOT] Ticket ${ticket.id} não está marcado como bot, ignorando chatbot`);
+    return;
+  }
 
   const selectedOption =
     msg?.message?.buttonsResponseMessage?.selectedButtonId ||

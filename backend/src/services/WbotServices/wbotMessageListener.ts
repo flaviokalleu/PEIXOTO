@@ -1088,6 +1088,18 @@ export const verifyMediaMessage = async (
         lastMessage: body
       });
       logger.error(Error("ERR_WAPP_DOWNLOAD_MEDIA"));
+      
+      const existingMessage = await Message.findOne({
+        where: {
+          wid: messageData.wid,
+          ticketId: messageData.ticketId
+        }
+      });
+      
+      if (existingMessage) {
+        return existingMessage;
+      }
+      
       return CreateMessageService({ messageData, companyId: companyId });
     }
 
@@ -1232,6 +1244,17 @@ export const verifyMediaMessage = async (
       lastMessage: body || media.filename
     });
 
+    const existingMessage = await Message.findOne({
+      where: {
+        wid: messageData.wid,
+        ticketId: messageData.ticketId
+      }
+    });
+    
+    if (existingMessage) {
+      return existingMessage;
+    }
+
     const newMessage = await CreateMessageService({
       messageData,
       companyId: companyId
@@ -1342,6 +1365,18 @@ export const verifyMessage = async (
     };
 
     console.log("💾 SAVING MESSAGE DATA:", JSON.stringify(messageData, null, 2));
+
+  const existingMessage = await Message.findOne({
+    where: {
+      wid: messageData.wid,
+      ticketId: messageData.ticketId
+    }
+  });
+  
+  if (existingMessage) {
+    console.log("⚠️ MESSAGE ALREADY EXISTS, SKIPPING SAVE");
+    return;
+  }
 
   await ticket.update({
     lastMessage: body
@@ -2666,7 +2701,7 @@ export const transferQueue = async (
   contact: Contact
 ): Promise<void> => {
   await UpdateTicketService({
-    ticketData: { queueId: queueId },
+    ticketData: { queueId: queueId, userId: ticket.userId },
     ticketId: ticket.id,
     companyId: ticket.companyId
   });
@@ -2682,6 +2717,18 @@ const flowbuilderIntegration = async (
   isFirstMsg?: Ticket,
   isTranfered?: boolean
 ) => {
+  // Verificação crítica: se há usuário atribuído, não executa FlowBuilder
+  if (ticket.userId) {
+    console.log(`[FLOWBUILDER_INTEGRATION] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando FlowBuilder`);
+    return;
+  }
+
+  // Verificação se o ticket está sendo tratado por bot
+  if (!ticket.isBot) {
+    console.log(`[FLOWBUILDER_INTEGRATION] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
+    return;
+  }
+
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg);
   const body = getBodyMessage(msg);
@@ -2705,9 +2752,16 @@ const flowbuilderIntegration = async (
     ticketImported: ticket.imported,
   };
 
-
-  await CreateMessageService({ messageData, companyId: ticket.companyId });
-
+  const existingMessage = await Message.findOne({
+    where: {
+      wid: messageData.wid,
+      ticketId: messageData.ticketId
+    }
+  });
+  
+  if (!existingMessage) {
+    await CreateMessageService({ messageData, companyId: ticket.companyId });
+  }
   */
 
   if (!msg.key.fromMe && ticket.status === "closed") {
@@ -2721,7 +2775,7 @@ const flowbuilderIntegration = async (
       ]
     });
     await UpdateTicketService({
-      ticketData: { status: "pending", integrationId: ticket.integrationId },
+      ticketData: { status: "pending", integrationId: ticket.integrationId, userId: ticket.userId },
       ticketId: ticket.id,
       companyId
     });
@@ -3150,6 +3204,18 @@ const executeFlowBuilderAfterQueue = async (
   companyId: number,
   contact: Contact
 ) => {
+  // Verificação crítica: se há usuário atribuído, não executa FlowBuilder
+  if (ticket.userId) {
+    console.log(`[FLOWBUILDER] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando FlowBuilder`);
+    return false;
+  }
+
+  // Verificação se o ticket está sendo tratado por bot
+  if (!ticket.isBot) {
+    console.log(`[FLOWBUILDER] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
+    return false;
+  }
+
   // Verificação e execução do FlowBuilder da fila após atribuição
   if (ticket.queueId && !msg.key.fromMe && !ticket.flowStopped) {
     console.log("[3357] Verificando se há FlowBuilder configurado para a fila:", ticket.queueId);
@@ -3251,6 +3317,18 @@ const flowBuilderQueue = async (
   contact: Contact,
   isFirstMsg: Ticket
 ) => {
+  // Verificação crítica: se há usuário atribuído, não executa FlowBuilder
+  if (ticket.userId) {
+    console.log(`[FLOWBUILDER_QUEUE] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando FlowBuilder`);
+    return;
+  }
+
+  // Verificação se o ticket está sendo tratado por bot
+  if (!ticket.isBot) {
+    console.log(`[FLOWBUILDER_QUEUE] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
+    return;
+  }
+
   const body = getBodyMessage(msg);
 
   const flow = await FlowBuilderModel.findOne({
@@ -3722,6 +3800,18 @@ const handleMessage = async (
     }
 
     if (!isNil(flow) && isQuestion && !msg.key.fromMe) {
+      // Verificação crítica: se há usuário atribuído, não executa FlowBuilder
+      if (ticket.userId) {
+        console.log(`[FLOWBUILDER_QUESTION] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando FlowBuilder`);
+        return;
+      }
+
+      // Verificação se o ticket está sendo tratado por bot
+      if (!ticket.isBot) {
+        console.log(`[FLOWBUILDER_QUESTION] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
+        return;
+      }
+
       console.log(
         "|============= QUESTION =============|",
         JSON.stringify(flow, null, 4)
@@ -3779,6 +3869,18 @@ const handleMessage = async (
 
     
     if (isOpenai && !isNil(flow) && !ticket.queue) {
+      // Verificação crítica: se há usuário atribuído, não executa FlowBuilder OpenAI
+      if (ticket.userId) {
+        console.log(`[FLOWBUILDER_OPENAI] Ticket ${ticket.id} tem usuário atribuído (${ticket.userId}), ignorando FlowBuilder OpenAI`);
+        return;
+      }
+
+      // Verificação se o ticket está sendo tratado por bot
+      if (!ticket.isBot) {
+        console.log(`[FLOWBUILDER_OPENAI] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder OpenAI`);
+        return;
+      }
+
       const nodeSelected = flow.flow["nodes"].find(
         (node: any) => node.id === ticket.lastFlowId
       );
@@ -4353,7 +4455,8 @@ const handleMessage = async (
     }
 
     if (ticket.queue && ticket.queueId && !msg.key.fromMe) {
-      if (!ticket.user || ticket.queue?.chatbots?.length > 0) {
+      // Só aciona o chatbot se não houver usuário atribuído E se tiver chatbots configurados na fila
+      if (!ticket.user && !ticket.isBot && ticket.queue?.chatbots?.length > 0) {
         await sayChatbot(
           ticket.queueId,
           wbot,
