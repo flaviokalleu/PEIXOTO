@@ -8,7 +8,6 @@ interface ExtraInfo {
   name: string;
   value: string;
 }
-
 interface Wallet {
   walletId: number | string;
   contactId: number | string;
@@ -42,7 +41,7 @@ const UpdateContactService = async ({
 
   const contact = await Contact.findOne({
     where: { id: contactId },
-    attributes: ["id", "name", "number", "channel", "email", "companyId", "acceptAudioMessage", "active", "profilePicUrl", "remoteJid", "urlPicture", "messengerId", "instagramId"],
+    attributes: ["id", "name", "number", "channel", "email", "companyId", "acceptAudioMessage", "active", "profilePicUrl", "remoteJid", "urlPicture"],
     include: ["extraInfo", "tags",
       {
         association: "wallets",
@@ -50,12 +49,12 @@ const UpdateContactService = async ({
       }]
   });
 
-  if (!contact) {
-    throw new AppError("ERR_NO_CONTACT_FOUND", 404);
+  if (contact?.companyId !== companyId) {
+    throw new AppError("Não é possível alterar registros de outra empresa");
   }
 
-  if (contact.companyId !== companyId) {
-    throw new AppError("Não é possível alterar registros de outra empresa");
+  if (!contact) {
+    throw new AppError("ERR_NO_CONTACT_FOUND", 404);
   }
 
   if (extraInfo) {
@@ -85,6 +84,7 @@ const UpdateContactService = async ({
     });
 
     const contactWallets: Wallet[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     wallets.forEach((wallet: any) => {
       contactWallets.push({
         walletId: !wallet.id ? wallet : wallet.id,
@@ -107,7 +107,7 @@ const UpdateContactService = async ({
   });
 
   await contact.reload({
-    attributes: ["id", "name", "number", "channel", "email", "companyId", "acceptAudioMessage", "active", "profilePicUrl", "remoteJid", "urlPicture", "messengerId", "instagramId"],
+    attributes: ["id", "name", "number", "channel", "email", "companyId", "acceptAudioMessage", "active", "profilePicUrl", "remoteJid", "urlPicture"],
     include: ["extraInfo", "tags",
       {
         association: "wallets",

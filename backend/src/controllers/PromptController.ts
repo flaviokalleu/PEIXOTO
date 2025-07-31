@@ -39,50 +39,18 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const [, token] = authHeader.split(" ");
   const decoded = verify(token, authConfig.secret);
   const { companyId } = decoded as TokenPayload;
-  const {
-    name,
-    apiKey,
-    prompt,
-    maxTokens,
-    temperature,
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    queueId,
-    maxMessages,
-    voice,
-    voiceKey,
-    voiceRegion,
-    model,
-  } = req.body;
-
-  const promptTable = await CreatePromptService({
-    name,
-    apiKey,
-    prompt,
-    maxTokens,
-    temperature,
-    promptTokens,
-    completionTokens,
-    totalTokens,
-    queueId,
-    maxMessages,
-    companyId,
-    voice,
-    voiceKey,
-    voiceRegion,
-    model,
-  });
+  const { name, apiKey, prompt, maxTokens, temperature, promptTokens, completionTokens, totalTokens, queueId, maxMessages,voice,voiceKey,voiceRegion } = req.body;
+  const promptTable = await CreatePromptService({ name, apiKey, prompt, maxTokens, temperature, promptTokens, completionTokens, totalTokens, queueId, maxMessages, companyId,voice,voiceKey,voiceRegion });
 
   const io = getIO();
-  io.of(String(companyId)).emit(`company-${companyId}-prompt`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-prompt`, {
     action: "update",
-    prompt: promptTable,
+    prompt: promptTable
   });
 
   return res.status(200).json(promptTable);
 };
-
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { promptId } = req.params;
@@ -95,7 +63,10 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
   return res.status(200).json(prompt);
 };
 
-export const update = async (req: Request, res: Response): Promise<Response> => {
+export const update = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
   const { promptId } = req.params;
   const promptData = req.body;
   const authHeader = req.headers.authorization;
@@ -103,12 +74,13 @@ export const update = async (req: Request, res: Response): Promise<Response> => 
   const decoded = verify(token, authConfig.secret);
   const { companyId } = decoded as TokenPayload;
 
-  const prompt = await UpdatePromptService({ promptData, promptId, companyId });
+  const prompt = await UpdatePromptService({ promptData, promptId: promptId, companyId });
 
   const io = getIO();
-  io.of(String(companyId)).emit(`company-${companyId}-prompt`, {
+  io.of(String(companyId))
+  .emit(`company-${companyId}-prompt`, {
     action: "update",
-    prompt,
+    prompt
   });
 
   return res.status(200).json(prompt);

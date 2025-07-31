@@ -34,7 +34,6 @@ class Setting extends Model<Setting> {
   @ForeignKey(() => Company)
   @Column
   companyId: number;
-  
 
   @BelongsTo(() => Company)
   company: Company;

@@ -1,12 +1,19 @@
 import { Request, Response } from "express";
+import express from "express";
 import * as Yup from "yup";
-import { MercadoPagoConfig, Preference } from "mercadopago";
+import * as dotenv from 'dotenv';
+import mercadopago from 'mercadopago'; // Remover se não estiver sendo usado
 import AppError from "../errors/AppError";
 import Company from "../models/Company";
 import Invoices from "../models/Invoices";
 import Setting from "../models/Setting";
 import { getIO } from "../libs/socket";
-import axios from "axios";
+import axios from 'axios';
+
+dotenv.config();
+
+// Configure Mercado Pago
+const accessToken = process.env.MP_ACCESS_TOKEN;
 
 // Endpoint para criar uma nova assinatura
 export const createSubscription = async (
@@ -23,70 +30,45 @@ export const createSubscription = async (
   });
 
   // Validação do payload
-  try {
-    await schema.validate(req.body);
-  } catch (err: any) {
-    throw new AppError("Validation fails: " + err.message, 400);
+  if (!(await schema.isValid(req.body))) {
+    throw new AppError("Validation fails", 400);
   }
 
   const { price, invoiceId } = req.body;
   const unitPrice = parseFloat(price);
 
-  // Buscar o accessToken da tabela Settings
-  let accessToken;
-
-  // Primeiro tenta buscar com companyId = 1
-  const setting = await Setting.findOne({
-    where: { companyId: 1, key: 'mpaccesstoken' },
-    attributes: ['value']
-  });
-
-  if (setting?.value) {
-    accessToken = setting.value;
-    console.log('[MP] Usando access token do banco:', accessToken.substring(0, 8) + '...');
-  } else {
-    accessToken = process.env.MP_ACCESS_TOKEN;
-    if (!accessToken) {
-      throw new AppError("Mercado Pago access token not found in settings or environment", 400);
-    }
-    console.log('[MP] Usando access token do .env:', accessToken.substring(0, 8) + '...');
-  }
-
-  // Instancia o SDK do Mercado Pago
-  const mpClient = new MercadoPagoConfig({ accessToken });
-
   // Dados para criar a preferência de pagamento
-  const preference = {
+  const data = {
     back_urls: {
       success: `${process.env.FRONTEND_URL}/financeiro`,
-      failure: `${process.env.FRONTEND_URL}/financeiro`,
-      pending: `${process.env.FRONTEND_URL}/financeiro`
+      failure: `${process.env.FRONTEND_URL}/financeiro`
     },
-    notification_url: `${process.env.BACKEND_URL}/subscription/webhook`,
+    auto_return: "approved",
     items: [
       {
-        id: `${invoiceId}`,
-        title: `#Fatura:${invoiceId}`,
+        title: `#fservice Fatura:${invoiceId}`,
         quantity: 1,
         currency_id: 'BRL',
         unit_price: unitPrice
       }
-    ],
-    statement_descriptor: "Witicket",
-    payment_methods: {
-      installments: 1
-    }
+    ]
   };
 
   try {
-    console.log('[MP] Criando preferência:', JSON.stringify(preference));
-    const preferenceClient = new Preference(mpClient);
-    const response = await preferenceClient.create({ body: preference });
-    console.log('[MP] Preferência criada:', response.init_point);
-    return res.json({ urlMcPg: response.init_point });
-  } catch (error: any) {
-    console.error("[MP] Erro Mercado Pago:", error.response?.data || error.message || error);
-    throw new AppError("Problema encontrado ao gerar link de pagamento, entre em contato com o suporte!", 400);
+    // Chamada para criar a preferência no Mercado Pago
+    const response = await axios.post('https://api.mercadopago.com/checkout/preferences', data, {
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}` // Usando accessToken aqui
+      }
+    });
+    
+    const urlMcPg = response.data.init_point;
+
+    return res.json({ urlMcPg });
+  } catch (error) {
+    console.error(error);
+    throw new AppError("Problema encontrado, entre em contato com o suporte!", 400);
   }
 };
 
@@ -104,27 +86,10 @@ export const webhook = async (
 
   if (data && data.id) {
     try {
-      // Buscar o accessToken da tabela Settings
-      let accessToken;
-      const setting = await Setting.findOne({
-        where: { companyId: 1, key: 'mpaccesstoken' },
-        attributes: ['value']
-      });
-
-      if (setting?.value) {
-        accessToken = setting.value;
-      } else {
-        accessToken = process.env.MP_ACCESS_TOKEN;
-        if (!accessToken) {
-          console.error("MP access token not found for webhook");
-          return res.json({ ok: false });
-        }
-      }
-
       const paymentResponse = await axios.get(`https://api.mercadopago.com/v1/payments/${data.id}`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}`
+          'Authorization': `Bearer ${accessToken}` // Usando accessToken aqui
         }
       });
 
@@ -132,7 +97,7 @@ export const webhook = async (
 
       // Processar pagamento aprovado
       if (paymentDetails.status === "approved") {
-        const invoiceID = paymentDetails.additional_info.items[0].title.replace("#Fatura:", "");
+        const invoiceID = paymentDetails.additional_info.items[0].title.replace("#fservice Fatura:", "");
         const invoice = await Invoices.findByPk(invoiceID);
 
         if (invoice) {
@@ -158,16 +123,14 @@ export const webhook = async (
         }
       }
     } catch (error) {
-      console.error("Erro no webhook Mercado Pago:", error);
-      // Não lance erro, apenas logue e retorne ok para evitar retries infinitos
-      return res.json({ ok: false });
+      console.error(error);
+      throw new AppError("Erro ao processar pagamento.", 400);
     }
   }
 
   return res.json({ ok: true });
+};
+export function createWebhook(arg0: string, createWebhook: any) {
+    throw new Error("Function not implemented.");
 }
 
-// Função não implementada
-export function createWebhook(arg0: string, createWebhook: any) {
-  throw new Error("Function not implemented.");
-}

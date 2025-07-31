@@ -59,7 +59,7 @@ const ShowTicketService = async (
       {
         model: Contact,
         as: "contact",
-        attributes: ["id", "companyId", "name", "number", "email", "profilePicUrl", "acceptAudioMessage", "active", "disableBot", "remoteJid", "urlPicture", "lgpdAcceptedAt", "messengerId", "instagramId"],
+        attributes: ["id", "companyId", "name", "number", "email", "profilePicUrl", "acceptAudioMessage", "active", "disableBot", "remoteJid", "urlPicture", "lgpdAcceptedAt"],
         include: ["extraInfo", "tags",
           {
             association: "wallets",
@@ -75,7 +75,7 @@ const ShowTicketService = async (
       {
         model: User,
         as: "user",
-        attributes: ["id", "name"]
+        attributes: ["id", "name"],
       },
       {
         model: Tag,
@@ -85,7 +85,8 @@ const ShowTicketService = async (
       {
         model: Whatsapp,
         as: "whatsapp",
-        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status", "type"]
+        attributes: ["id", "name", "groupAsTicket", "greetingMediaAttachment", "facebookUserToken", "facebookUserId", "status"]
+
       },
       {
         model: Company,

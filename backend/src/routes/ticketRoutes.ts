@@ -1,6 +1,5 @@
 import express from "express";
 import isAuth from "../middleware/isAuth";
-import * as WaVoipController from "../controllers/WaVoipController";
 
 import * as TicketController from "../controllers/TicketController";
 
@@ -21,8 +20,6 @@ ticketRoutes.get("/tickets/u/:uuid", isAuth, TicketController.showFromUUID);
 ticketRoutes.post("/tickets", isAuth, TicketController.store);
 
 ticketRoutes.put("/tickets/:ticketId", isAuth, TicketController.update);
-ticketRoutes.post("/tickets/:ticketId/calls/active", isAuth, WaVoipController.initiateCall);
-ticketRoutes.get("/tickets/:ticketId/calls/active", isAuth, WaVoipController.getCallStatus);
 
 ticketRoutes.delete("/tickets/:ticketId", isAuth, TicketController.remove);
 

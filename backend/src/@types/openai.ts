@@ -4,11 +4,10 @@ export interface IOpenAi {
     voice: string;
     voiceKey: string;
     voiceRegion: string;
-    maxTokens: number;
-    temperature: number;
+    maxTokens: string;
+    temperature: string;
     apiKey: string;
-    queueId: number;
-    maxMessages: number;
-    model: string; 
-  }
-  
+    queueId: string;
+    maxMessages: string;
+    model: string;
+};

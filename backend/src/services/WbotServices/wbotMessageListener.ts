@@ -3801,11 +3801,11 @@ const handleMessage = async (
         voice,
         voiceKey,
         voiceRegion,
-        maxTokens: parseInt(String(maxTokens)),
-        temperature: parseInt(String(temperature)),
+        maxTokens: parseInt(maxTokens),
+        temperature: parseInt(temperature),
         apiKey,
-        queueId: parseInt(queueId.toString()),
-        maxMessages: parseInt(maxMessages.toString()),
+        queueId: parseInt(queueId),
+        maxMessages: parseInt(maxMessages),
         model: (nodeSelected.data.typebotIntegration as any)?.model || "gpt-3.5-turbo"
       };
 
@@ -4559,7 +4559,7 @@ const filterMessages = (msg: WAMessage): boolean => {
       WAMessageStubType.E2E_DEVICE_CHANGED,
       WAMessageStubType.E2E_IDENTITY_CHANGED,
       WAMessageStubType.CIPHERTEXT
-    ].includes(msg.messageStubType)
+    ].includes(msg.messageStubType as WAMessageStubType)
   )
     return false;
 

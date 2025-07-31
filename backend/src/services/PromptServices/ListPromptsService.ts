@@ -17,7 +17,7 @@ interface Response {
 const ListPromptsService = async ({
   searchParam = "",
   pageNumber = "1",
-  companyId,
+  companyId
 }: Request): Promise<Response> => {
   let whereCondition = {};
   const limit = 20;
@@ -25,8 +25,10 @@ const ListPromptsService = async ({
 
   if (searchParam) {
     whereCondition = {
-      [Op.or]: [{ name: { [Op.like]: `%${searchParam}%` } }],
-    };
+      [Op.or]: [
+        { name: { [Op.like]: `%${searchParam}%` } }
+      ]
+    }
   }
 
   const { count, rows: prompts } = await Prompt.findAndCountAll({
@@ -35,8 +37,8 @@ const ListPromptsService = async ({
       {
         model: Queue,
         as: "queue",
-        attributes: ["id", "name"],
-      },
+        attributes: ["id", "name"]
+      }
     ],
     limit,
     offset,
@@ -47,7 +49,7 @@ const ListPromptsService = async ({
   return {
     prompts,
     count,
-    hasMore,
+    hasMore
   };
 };
 

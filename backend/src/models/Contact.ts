@@ -77,12 +77,6 @@ class Contact extends Model<Contact> {
   @HasMany(() => Ticket)
   tickets: Ticket[];
 
-  @Column
-  messengerId: string;
-
-  @Column
-  instagramId: string;
-  
   @HasMany(() => ContactCustomField)
   extraInfo: ContactCustomField[];
 

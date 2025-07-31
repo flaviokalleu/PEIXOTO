@@ -45,18 +45,9 @@ const isAuth = async (req: Request, res: Response, next: NextFunction): Promise<
       companyId
     };
   } catch (err: any) {
-    console.error("Erro de autenticação:", err.message);
-    
-    if (err.name === "TokenExpiredError") {
-      console.log("Token expirado, retornando erro 403 para renovação");
-      throw new AppError("ERR_SESSION_EXPIRED", 403);
-    } else if (err.name === "JsonWebTokenError") {
-      console.log("Token inválido, retornando erro 401");
-      throw new AppError("ERR_SESSION_EXPIRED", 401);
-    } else if (err.message === "ERR_SESSION_EXPIRED" && err.statusCode === 401) {
+    if (err.message === "ERR_SESSION_EXPIRED" && err.statusCode === 401) {
       throw new AppError(err.message, 401);
     } else {
-      console.log("Erro desconhecido de token, tentando renovar");
       throw new AppError(
         "Invalid token. We'll try to assign a new one on next request",
         403

@@ -31,7 +31,7 @@ module.exports = {
             requiredTag: "disabled",
             lgpdDeleteMessage: "disabled",
             lgpdHideNumber: "disabled",
-            lgpdConsent: "disabled",            
+            lgpdConsent: "disabled",
             lgpdLink: "",
             lgpdMessage: "",
             createdAt: new Date(),

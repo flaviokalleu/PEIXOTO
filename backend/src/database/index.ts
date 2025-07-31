@@ -52,7 +52,6 @@ import { FlowAudioModel } from "../models/FlowAudio";
 import { FlowCampaignModel } from "../models/FlowCampaign";
 import { FlowImgModel } from "../models/FlowImg";
 import { WebhookModel } from "../models/Webhook";
-import Call from "../models/Call";
 
 // eslint-disable-next-line
 const dbConfig = require("../config/database");
@@ -112,8 +111,7 @@ const models = [
   FlowAudioModel,
   FlowCampaignModel,
   FlowImgModel,
-  WebhookModel,
-  Call
+  WebhookModel
 ];
 
 sequelize.addModels(models);

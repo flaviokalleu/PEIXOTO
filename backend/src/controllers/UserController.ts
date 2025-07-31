@@ -21,7 +21,6 @@ import User from "../models/User";
 import { head } from "lodash";
 import ToggleChangeWidthService from "../services/UserServices/ToggleChangeWidthService";
 import APIShowEmailUserService from "../services/UserServices/APIShowEmailUserService";
-import Setting from "../models/Setting";
 
 
 type IndexQuery = {
@@ -134,77 +133,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       const _email = {
         to: email,
         subject: `Login e senha da Empresa ${companyName}`,
-        text: `<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bem-vindo(a) à ${process.env.APP_NAME}</title>
-</head>
-<body style="margin: 0; padding: 0; font-family: 'Arial', sans-serif; background-color: #f0f4f8; color: #333;">
-  <table role="presentation" style="width: 100%; max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);">
-    <tr>
-      <td style="padding: 40px 30px; text-align: center;">
-        <!-- Header -->
-        <h1 style="font-size: 26px; color: #2c3e50; margin: 0 0 20px; font-weight: 600;">Bem-vindo(a) ${companyName}!</h1>
-        <p style="font-size: 16px; line-height: 1.6; color: #555; margin: 0 0 25px;">
-          Olá, ${name},<br>
-          Estamos entusiasmados por tê-lo(a) conosco! Seu cadastro foi realizado com sucesso. Confira os detalhes da sua conta abaixo:
-        </p>
-
-        <!-- Company Details -->
-        <table style="width: 100%; margin: 20px 0; font-size: 16px; color: #555; border-collapse: collapse;">
-          <tr>
-            <td style="padding: 10px 0; text-align: left; font-weight: bold; border-bottom: 1px solid #eee;">Empresa:</td>
-            <td style="padding: 10px 0; text-align: right; border-bottom: 1px solid #eee;">${companyName}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; text-align: left; font-weight: bold; border-bottom: 1px solid #eee;">E-mail:</td>
-            <td style="padding: 10px 0; text-align: right; border-bottom: 1px solid #eee;">${email}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; text-align: left; font-weight: bold; border-bottom: 1px solid #eee;">Senha:</td>
-            <td style="padding: 10px 0; text-align: right; border-bottom: 1px solid #eee;">${password}</td>
-          </tr>
-          <tr>
-            <td style="padding: 10px 0; text-align: left; font-weight: bold;">Vencimento do Trial:</td>
-            <td style="padding: 10px 0; text-align: right;">${dateToClient(date)}</td>
-          </tr>
-        </table>
-
-        <!-- Call to Action Button -->
-        <a href="${process.env.FRONTEND_URL}/login" style="display: inline-block; padding: 12px 30px; background-color: #6c5ce7; color: #ffffff; text-decoration: none; font-size: 16px; font-weight: bold; border-radius: 8px; transition: background-color 0.3s ease;">
-          Acessar Minha Conta
-        </a>
-        <style>
-          a:hover {
-            background-color: #5a4cd1;
-          }
-        </style>
-
-        <!-- Additional Info -->
-        <p style="font-size: 14px; color: #777; margin: 25px 0 0; line-height: 1.5;">
-          Para começar, clique no botão acima para acessar sua conta. Caso tenha dúvidas, nossa equipe de suporte está pronta para ajudar.
-        </p>
-        <p style="font-size: 14px; color: #777; margin: 10px 0 0;">
-          Link não funciona? Copie e cole este endereço no seu navegador:<br>
-          <a href="${process.env.FRONTEND_URL}/login" style="color: #6c5ce7; text-decoration: none;">${process.env.FRONTEND_URL}/login</a>
-        </p>
-      </td>
-    </tr>
-    <!-- Footer -->
-    <tr>
-      <td style="padding: 20px 30px; background-color: #f0f4f8; text-align: center; font-size: 12px; color: #999; border-radius: 0 0 12px 12px;">
-        <p style="margin: 0;">© ${new Date().getFullYear()} Sua Empresa. Todos os direitos reservados.</p>
-        <p style="margin: 5px 0 0;">
-          <a href="https://suaempresa.com/suporte" style="color: #6c5ce7; text-decoration: none;">Suporte</a> | 
-          <a href="https://suaempresa.com/privacidade" style="color: #6c5ce7; text-decoration: none;">Política de Privacidade</a>
-        </p>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`
+        text: `Olá ${name}, este é um email sobre o cadastro da ${companyName}!<br><br>
+        Segue os dados da sua empresa:<br><br>Nome: ${companyName}<br>Email: ${email}<br>Senha: ${password}<br>Data Vencimento Trial: ${dateToClient(date)}`
       }
 
       await SendMail(_email)
@@ -455,49 +385,4 @@ export const toggleChangeWidht = async (req: Request, res: Response): Promise<Re
     });
 
   return res.status(200).json(user);
-};
-export const getUserCreationStatus = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  try {
-    const setting = await Setting.findOne({
-      where: {
-        companyId: 1,
-        key: "userCreation",
-      },
-    });
-
-    if (!setting) {
-      return res.status(200).json({ userCreation: "disabled" }); // Valor padrão
-    }
-
-    return res.status(200).json({ userCreation: setting.value });
-  } catch (error) {
-    return res
-      .status(500)
-      .json({ error: "Failed to fetch user creation status" });
-  }
-};
-export const updateLanguage = async (req: Request, res: Response): Promise<Response> => {
-  try {
-    const { userId } = req.params;
-    const { language } = req.body;
-
-    // Validação básica do idioma
-    const validLanguages = ["pt-BR", "en", "es", "tr"];
-    if (!language || !validLanguages.includes(language)) {
-      return res.status(400).json({ error: "Invalid language. Must be one of: pt-BR, en, es, tr" });
-    }
-
-    const user = await User.findByPk(userId);
-    if (!user) {
-      return res.status(404).json({ error: "User not found" });
-    }
-
-    await user.update({ language });
-    return res.status(200).json({ id: user.id });
-  } catch (error) {
-    return res.status(500).json({ error: error.message });
-  }
 };

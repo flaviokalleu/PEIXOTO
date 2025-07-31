@@ -2,18 +2,18 @@ import {
   Table,
   Column,
   CreatedAt,
-  AutoIncrement,
   UpdatedAt,
   Model,
   DataType,
   PrimaryKey,
+  AutoIncrement,
   Default,
   AllowNull,
   HasMany,
   Unique,
   BelongsToMany,
   ForeignKey,
-  BelongsTo,
+  BelongsTo
 } from "sequelize-typescript";
 import Queue from "./Queue";
 import Ticket from "./Ticket";
@@ -23,7 +23,7 @@ import QueueIntegrations from "./QueueIntegrations";
 import Prompt from "./Prompt";
 import { FlowBuilderModel } from "./FlowBuilder";
 
-@Table({ tableName: "Whatsapps" })
+@Table
 class Whatsapp extends Model<Whatsapp> {
   @PrimaryKey
   @AutoIncrement
@@ -38,7 +38,7 @@ class Whatsapp extends Model<Whatsapp> {
   @Column(DataType.TEXT)
   session: string;
 
-  @Column(DataType.UUID)
+  @Column(DataType.TEXT)
   qrcode: string;
 
   @Column
@@ -61,7 +61,7 @@ class Whatsapp extends Model<Whatsapp> {
   greetingMessage: string;
 
   @Column
-  greetingMediaAttachment: string;
+  greetingMediaAttachment: string
 
   @Default("")
   @Column(DataType.TEXT)
@@ -74,9 +74,6 @@ class Whatsapp extends Model<Whatsapp> {
   @Default("")
   @Column(DataType.TEXT)
   outOfHoursMessage: string;
-
-  @Column
-  type: string;
 
   @Column({ defaultValue: "stable" })
   provider: string;
@@ -135,12 +132,12 @@ class Whatsapp extends Model<Whatsapp> {
   @Column
   maxUseBotQueues: number;
 
-  @Default("0")
+  @Default(0)
   @Column
   timeUseBotQueues: string;
 
   @AllowNull(true)
-  @Default("0")
+  @Default(0)
   @Column
   expiresTicket: string;
 
@@ -179,7 +176,7 @@ class Whatsapp extends Model<Whatsapp> {
   @Default("disabled")
   @Column
   groupAsTicket: string;
-
+  
   @Column
   importOldMessages: Date;
 
@@ -188,12 +185,12 @@ class Whatsapp extends Model<Whatsapp> {
 
   @Column
   statusImportMessages: string;
+  
+  @Column
+  closedTicketsPostImported:boolean;
 
   @Column
-  closedTicketsPostImported: boolean;
-
-  @Column
-  importOldMessagesGroups: boolean;
+  importOldMessagesGroups:boolean;
 
   @Column
   timeCreateNewTicket: number;
@@ -205,8 +202,10 @@ class Whatsapp extends Model<Whatsapp> {
   @BelongsTo(() => QueueIntegrations)
   queueIntegrations: QueueIntegrations;
 
-  @Column(DataType.JSONB)
-  schedules: any[];
+  @Column({
+    type: DataType.JSONB
+  })
+  schedules: [];
 
   @ForeignKey(() => Prompt)
   @Column
@@ -240,7 +239,7 @@ class Whatsapp extends Model<Whatsapp> {
   flowIdWelcome: number;
 
   @BelongsTo(() => FlowBuilderModel)
-  flowBuilder: FlowBuilderModel;
+  flowBuilder: FlowBuilderModel
 }
 
 export default Whatsapp;

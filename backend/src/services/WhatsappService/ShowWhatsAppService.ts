@@ -11,11 +11,6 @@ const ShowWhatsAppService = async (
   companyId: number,
   session?: any
 ): Promise<Whatsapp> => {
-  // Validar se o ID é válido antes de fazer a consulta
-  if (!id || id === "default" || (typeof id === "string" && isNaN(parseInt(id)))) {
-    throw new AppError("ERR_INVALID_WHATSAPP_ID", 400);
-  }
-
   const findOptions: FindOptions = {
     include: [
       {
@@ -48,19 +43,14 @@ const ShowWhatsAppService = async (
     findOptions.attributes = { exclude: ["session"] };
   }
 
-  // Converter string para número se necessário
-  const whatsappId = typeof id === "string" ? parseInt(id) : id;
-  
-  const whatsapp = await Whatsapp.findByPk(whatsappId, findOptions);
+  const whatsapp = await Whatsapp.findByPk(id, findOptions);
 
-  // Primeiro verificar se o WhatsApp existe
-  if (!whatsapp) {
-    throw new AppError("ERR_NO_WAPP_FOUND", 404);
+  if (whatsapp?.companyId !== companyId) {
+    throw new AppError("Não é possível acessar registros de outra empresa");
   }
 
-  // Depois verificar se pertence à empresa correta
-  if (whatsapp.companyId !== companyId) {
-    throw new AppError("Não é possível acessar registros de outra empresa", 403);
+  if (!whatsapp) {
+    throw new AppError("ERR_NO_WAPP_FOUND", 404);
   }
 
   return whatsapp;

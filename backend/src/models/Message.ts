@@ -49,13 +49,9 @@ class Message extends Model<Message> {
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     if (this.getDataValue("mediaUrl")) {
-      // Para mensagens privadas, usar rota autenticada
-      if (this.isPrivate) {
-        return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/media/${this.companyId}/${this.getDataValue("mediaUrl")}`;
-      }
       
-      // Para mensagens normais, usar rota pública
       return `${process.env.BACKEND_URL}${process.env.PROXY_PORT ?`:${process.env.PROXY_PORT}`:""}/public/company${this.companyId}/${this.getDataValue("mediaUrl")}`;
+
     }
     return null;
   }

@@ -8,7 +8,7 @@ import {
   Model,
   PrimaryKey,
   Table,
-  UpdatedAt,
+  UpdatedAt
 } from "sequelize-typescript";
 import Queue from "./Queue";
 import Company from "./Company";
@@ -51,22 +51,18 @@ class Prompt extends Model<Prompt> {
   totalTokens: number;
 
   @AllowNull(false)
-  @Column({ defaultValue: "alloy" })
+  @Column
   voice: string;
 
   @AllowNull(true)
   @Column
-  voiceKey: string;
+  voiceKey:string;
 
   @AllowNull(true)
   @Column
-  voiceRegion: string;
+  voiceRegion:string;
 
-  @AllowNull(false)
-  @Column({ defaultValue: "gpt-3.5-turbo" })
-  model: string;
-
-  @AllowNull(true)
+  @AllowNull
   @ForeignKey(() => Queue)
   @Column
   queueId: number;

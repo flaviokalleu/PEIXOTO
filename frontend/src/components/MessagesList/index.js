@@ -388,6 +388,9 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const reducer = (state, action) => {
+  console.log("[FRONTEND REDUCER] Ação:", action.type, "Payload:", action.payload);
+  console.log("[FRONTEND REDUCER] Estado atual:", state.length, "mensagens");
+
   if (action.type === "LOAD_MESSAGES") {
     const messages = action.payload;
     const newMessages = [];
@@ -402,6 +405,7 @@ const reducer = (state, action) => {
       }
     });
 
+    console.log("[FRONTEND REDUCER] LOAD_MESSAGES - Novas:", newMessages.length, "Total:", [...newMessages, ...state].length);
     return [...newMessages, ...state];
   }
 
@@ -411,8 +415,10 @@ const reducer = (state, action) => {
 
     if (messageIndex !== -1) {
       state[messageIndex] = newMessage;
+      console.log("[FRONTEND REDUCER] ADD_MESSAGE - Mensagem atualizada:", newMessage.id);
     } else {
       state.push(newMessage);
+      console.log("[FRONTEND REDUCER] ADD_MESSAGE - Nova mensagem adicionada:", newMessage.id);
     }
 
     return [...state];
@@ -424,14 +430,31 @@ const reducer = (state, action) => {
 
     if (messageIndex !== -1) {
       state[messageIndex] = messageToUpdate;
+      console.log("[FRONTEND REDUCER] UPDATE_MESSAGE - Mensagem atualizada:", messageToUpdate.id);
+    } else {
+      console.log("[FRONTEND REDUCER] UPDATE_MESSAGE - Mensagem não encontrada:", messageToUpdate.id);
     }
 
     return [...state];
   }
 
+  if (action.type === "DELETE_MESSAGE") {
+    const messageId = action.payload;
+    const filteredMessages = state.filter((m) => m.id !== messageId);
+    
+    console.log("[FRONTEND REDUCER] DELETE_MESSAGE - Mensagem deletada:", messageId);
+    console.log("[FRONTEND REDUCER] DELETE_MESSAGE - Mensagens restantes:", filteredMessages.length);
+    
+    return filteredMessages;
+  }
+
   if (action.type === "RESET") {
+    console.log("[FRONTEND REDUCER] RESET - Limpando todas as mensagens");
     return [];
   }
+
+  console.log("[FRONTEND REDUCER] Ação não reconhecida:", action.type);
+  return state;
 };
 
 const MessagesList = ({
@@ -447,6 +470,7 @@ const MessagesList = ({
   const [hasMore, setHasMore] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [connectionError, setConnectionError] = useState(false);
   const history = useHistory();
   const lastMessageRef = useRef();
 
@@ -492,6 +516,60 @@ const MessagesList = ({
   }, [])
 
   useEffect(() => {
+    // Sistema de monitoramento de conexão
+    if (connectionError) {
+      const healthCheckInterval = setInterval(async () => {
+        try {
+          console.log("[FRONTEND] Verificando saúde da conexão...");
+          const response = await api.get('/health-check', { timeout: 5000 });
+          if (response.status === 200) {
+            console.log("[FRONTEND] Conexão restaurada, recarregando mensagens...");
+            setConnectionError(false);
+            clearInterval(healthCheckInterval);
+            
+            // Recarregar mensagens quando a conexão for restaurada
+            if (ticketId && ticketId !== "undefined") {
+              setPageNumber(1);
+              dispatch({ type: "RESET" });
+            }
+          }
+        } catch (error) {
+          console.log("[FRONTEND] Conexão ainda com problemas, tentando novamente...");
+        }
+      }, 10000); // Verificar a cada 10 segundos
+
+      return () => clearInterval(healthCheckInterval);
+    }
+  }, [connectionError, ticketId]);
+
+  useEffect(() => {
+    // Sistema de monitoramento de conexão
+    if (connectionError) {
+      const healthCheckInterval = setInterval(async () => {
+        try {
+          console.log("[FRONTEND] Verificando saúde da conexão...");
+          const response = await api.get('/health-check', { timeout: 5000 });
+          if (response.status === 200) {
+            console.log("[FRONTEND] Conexão restaurada, recarregando mensagens...");
+            setConnectionError(false);
+            clearInterval(healthCheckInterval);
+            
+            // Recarregar mensagens quando a conexão for restaurada
+            if (ticketId && ticketId !== "undefined") {
+              setPageNumber(1);
+              dispatch({ type: "RESET" });
+            }
+          }
+        } catch (error) {
+          console.log("[FRONTEND] Conexão ainda com problemas, tentando novamente...");
+        }
+      }, 10000); // Verificar a cada 10 segundos
+
+      return () => clearInterval(healthCheckInterval);
+    }
+  }, [connectionError, ticketId]);
+
+  useEffect(() => {
     dispatch({ type: "RESET" });
     setPageNumber(1);
 
@@ -508,21 +586,40 @@ const MessagesList = ({
         }
         if (isNil(ticketId)) return;
         try {
+          console.log("[FRONTEND] Carregando mensagens para ticket:", ticketId, "página:", pageNumber);
           const { data } = await api.get("/messages/" + ticketId, {
             params: { pageNumber, selectedQueues: JSON.stringify(selectedQueuesMessage) },
           });
+
+          console.log("[FRONTEND] Mensagens recebidas do backend:", data.messages.length);
+          console.log("[FRONTEND] HasMore:", data.hasMore, "Count:", data.count);
 
           if (currentTicketId.current === ticketId) {
             dispatch({ type: "LOAD_MESSAGES", payload: data.messages });
             setHasMore(data.hasMore);
             setLoading(false);
             setLoadingMore(false);
+            setConnectionError(false); // Reset erro de conexão em caso de sucesso
           }
 
           if (pageNumber === 1 && data.messages.length > 1) {
             scrollToBottom();
           }
         } catch (err) {
+          console.error("[FRONTEND] Erro ao carregar mensagens:", err);
+          
+          // Log específico para timeouts
+          if (err.code === 'ECONNABORTED') {
+            console.error("[FRONTEND] Timeout na requisição de mensagens - verificar conectividade");
+            setConnectionError(true);
+          }
+          
+          // Verificar se o erro é de conectividade
+          if (err.message?.includes('Network Error')) {
+            console.error("[FRONTEND] Erro de rede - backend pode estar indisponível");
+            setConnectionError(true);
+          }
+          
           setLoading(false);
           toastError(err);
           setLoadingMore(false);
@@ -549,16 +646,32 @@ const MessagesList = ({
     }
 
     const onAppMessageMessagesList = (data) => {
+      console.log("[FRONTEND] Socket recebido:", data.action, data);
+
       if (data.action === "create" && data.ticket.uuid === ticketId) {
+        console.log("[FRONTEND] Adicionando nova mensagem:", data.message.id);
         dispatch({ type: "ADD_MESSAGE", payload: data.message });
         scrollToBottom();
       }
 
       if (data.action === "update" && data?.message?.ticket?.uuid === ticketId) {
+        console.log("[FRONTEND] Atualizando mensagem:", data.message.id);
+        
+        // ✅ MONITORAMENTO: Detectar mudanças no usuário do ticket
+        if (data.ticket && data.ticket.userId !== data.oldUserId) {
+          console.warn("[FRONTEND] ⚠️ DETECÇÃO: Usuário do ticket mudou!", {
+            ticketId: data.ticket.id,
+            oldUserId: data.oldUserId,
+            newUserId: data.ticket.userId,
+            status: data.ticket.status
+          });
+        }
+        
         dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
       }
 
-      if (data.action == "delete" && data.message.ticket?.uuid === ticketId) {
+      if (data.action === "delete" && data.message.ticket?.uuid === ticketId) {
+        console.log("[FRONTEND] Deletando mensagem:", data.messageId);
         dispatch({ type: "DELETE_MESSAGE", payload: data.messageId });
       }
     }
@@ -1413,6 +1526,24 @@ return (
     {loading && (
       <div>
         <CircularProgress className={classes.circleLoading} />
+      </div>
+    )}
+    
+    {connectionError && (
+      <div
+        style={{
+          width: "100%",
+          display: "flex",
+          padding: "10px",
+          alignItems: "center",
+          backgroundColor: "#ffebee",
+          color: "#c62828",
+          borderTop: "1px solid #e57373"
+        }}
+      >
+        <span>
+          ⚠️ Problemas de conectividade detectados. Verificando conexão com o servidor...
+        </span>
       </div>
     )}
   </div>

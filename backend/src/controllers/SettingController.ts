@@ -3,8 +3,6 @@ import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import AppError from "../errors/AppError";
 
-import { head } from "lodash";
-import User from "../models/User";
 import UpdateSettingService from "../services/SettingServices/UpdateSettingService";
 import ListSettingsService from "../services/SettingServices/ListSettingsService";
 import ListSettingsServiceOne from "../services/SettingServices/ListSettingsServiceOne";
@@ -140,34 +138,6 @@ export const storeLogo = async (req: Request, res: Response): Promise<Response> 
   return res.status(406);
 }
 
-export const certUpload = async (
-  req: Request,
-  res: Response
-): Promise<Response> => {
-  const { body } = req.body;
-  const { companyId } = req.user;
-
-  const userId = req.user.id;
-  const requestUser = await User.findByPk(userId);
-
-  if (requestUser.super === false) {
-    throw new AppError("você nao tem permissão para esta ação!");
-  }
-
-  if (req.user.profile !== "admin") {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
-  if (companyId !== 1) {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-
-  const files = req.files as Express.Multer.File[];
-  const file = head(files);
-  console.log(file);
-  return res.send({ mensagem: "Arquivo Anexado" });
-};
-
 export const storePrivateFile = async (req: Request, res: Response): Promise<Response> => {
   const file = req.file as Express.Multer.File;
   const { settingKey }: PrivateFileRequest = req.body;
@@ -184,6 +154,7 @@ export const storePrivateFile = async (req: Request, res: Response): Promise<Res
   
   return res.status(200).json(setting.value);
 }
+
 export const checkTranscriptionKey = async (req: Request, res: Response): Promise<Response> => {
   try {
     const { companyId } = req.user;

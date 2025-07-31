@@ -24,8 +24,6 @@ import CreateMessageService from "../MessageServices/CreateMessageService";
 import FindOrCreateTicketService from "./FindOrCreateTicketService";
 import formatBody from "../../helpers/Mustache";
 import { Mutex } from "async-mutex";
-import { manualTransferCache } from "../../services/ManualTransferCacheService/ManualTransferCacheService";
-import logger from "../../utils/logger";
 
 interface TicketData {
   status?: string;
@@ -47,7 +45,6 @@ interface Request {
   ticketData: TicketData;
   ticketId: string | number;
   companyId: number;
-  ratingId?: number;
 }
 
 interface Response {
@@ -59,8 +56,7 @@ interface Response {
 const UpdateTicketService = async ({
   ticketData,
   ticketId,
-  companyId,
-  ratingId
+  companyId
 }: Request): Promise<Response> => {
   try {
     let {
@@ -388,7 +384,7 @@ const UpdateTicketService = async ({
 
         if (settings.sendMsgTransfTicket === "enabled") {
           // Mensagem de transferencia da FILA
-          if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
+          if ((oldQueueId !== queueId || oldUserId !== userId) && !isNil(oldQueueId) && !isNil(queueId) && !isNil(queueId) && ticket.whatsapp.status === 'CONNECTED') {
 
             const wbot = await GetTicketWbot(ticket);
             const msgtxt = formatBody(`\u200e ${settings.transferMessage.replace("${queue.name}", queue?.name)}`, ticket);
@@ -698,15 +694,6 @@ const UpdateTicketService = async ({
       typebotStatus: useIntegration,
       unreadMessages
     });
-
-    // ✅ NOVA LÓGICA: Detectar transferência manual
-    const isUserChange = oldUserId !== userId && userId !== null;
-    const isQueueChange = oldQueueId !== queueId && queueId !== null;
-    
-    if (isUserChange || isQueueChange) {
-      logger.info(`🔄 Transferência manual detectada - Ticket: ${ticketId}, De usuário: ${oldUserId} para: ${userId}, De fila: ${oldQueueId} para: ${queueId}`);
-      manualTransferCache.markManualTransfer(Number(ticketId), userId, queueId);
-    }
 
     ticketTraking.queuedAt = moment().toDate();
     ticketTraking.queueId = queueId;

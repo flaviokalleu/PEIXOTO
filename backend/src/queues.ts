@@ -3,7 +3,6 @@ import BullQueue from "bull";
 import { MessageData, SendMessage } from "./helpers/SendMessage";
 import Whatsapp from "./models/Whatsapp";
 import logger from "./utils/logger";
-import * as nodemailer from 'nodemailer';
 import moment from "moment";
 import Schedule from "./models/Schedule";
 import { Op, QueryTypes, Sequelize } from "sequelize";
@@ -43,7 +42,6 @@ import TicketTag from "./models/TicketTag";
 import Tag from "./models/Tag";
 import { delay } from "@whiskeysockets/baileys";
 import Plan from "./models/Plan";
-import { manualTransferCache } from "./services/ManualTransferCacheService/ManualTransferCacheService";
 
 const connection = process.env.REDIS_URI || "";
 const limiterMax = process.env.REDIS_OPT_LIMITER_MAX || 1;
@@ -1091,7 +1089,7 @@ async function handleResumeTicketsOutOfHour(job) {
           const moveQueueId = w.sendIdQueue;
           const moveQueueTime = moveQueue;
           const idQueue = moveQueueId;
-          const timeQueue = moveQueue;
+          const timeQueue = moveQueueTime;
 
           if (moveQueue > 0) {
 
@@ -1199,7 +1197,7 @@ async function handleVerifyQueue(job) {
           const moveQueueId = w.sendIdQueue;
           const moveQueueTime = moveQueue;
           const idQueue = moveQueueId;
-          const timeQueue = moveQueue;
+          const timeQueue = moveQueueTime;
 
           if (moveQueue > 0) {
 
@@ -1287,15 +1285,12 @@ async function handleVerifyQueue(job) {
   }
 };
 
-const handleRandomUser = async () => {
-  logger.info("🔄 Iniciando job handleRandomUser");
+async function handleRandomUser() {
+  // logger.info("Iniciando a randomização dos atendimentos...");
 
   const jobR = new CronJob('0 */2 * * * *', async () => {
-    try {
-      // ✅ ADICIONE ESTATÍSTICAS DA CACHE
-      const cacheStats = manualTransferCache.getStats();
-      logger.info(`📊 Cache stats - Total: ${cacheStats.total}, Protegidos: ${cacheStats.protected}`);
 
+    try {
       const companies = await Company.findAll({
         attributes: ['id', 'name'],
         where: {
@@ -1315,14 +1310,156 @@ const handleRandomUser = async () => {
         ]
       });
 
-      logger.info(`🏢 Empresas com roteador ativo: ${companies.length}`);
+      if (companies) {
+        companies.map(async c => {
+          c.queues.map(async q => {
+            const { count, rows: tickets } = await Ticket.findAndCountAll({
+              where: {
+                companyId: c.id,
+                status: "pending",
+                queueId: q.id,
+              },
+            });
 
-      // ... resto do código ...
+            //logger.info(`Localizado: ${count} filas para randomização.`);
+
+            const getRandomUserId = (userIds) => {
+              const randomIndex = Math.floor(Math.random() * userIds.length);
+              return userIds[randomIndex];
+            };
+
+            // Function to fetch the User record by userId
+            const findUserById = async (userId, companyId) => {
+              try {
+                const user = await User.findOne({
+                  where: {
+                    id: userId,
+                    companyId
+                  },
+                });
+
+                if (user && user?.profile === "user") {
+                  if (user.online === true) {
+                    return user.id;
+                  } else {
+                    // logger.info("USER OFFLINE");
+                    return 0;
+                  }
+                } else {
+                  // logger.info("ADMIN");
+                  return 0;
+                }
+
+              } catch (errorV) {
+                Sentry.captureException(errorV);
+                logger.error("SearchForUsersRandom -> VerifyUsersRandom: error", errorV.message);
+                throw errorV;
+              }
+            };
+
+            if (count > 0) {
+              for (const ticket of tickets) {
+                const { queueId, userId } = ticket;
+                const tempoRoteador = q.tempoRoteador;
+                // Find all UserQueue records with the specific queueId
+                const userQueues = await UserQueue.findAll({
+                  where: {
+                    queueId: queueId,
+                  },
+                });
+
+                const contact = await ShowContactService(ticket.contactId, ticket.companyId);
+
+                // Extract the userIds from the UserQueue records
+                const userIds = userQueues.map((userQueue) => userQueue.userId);
+
+                const tempoPassadoB = moment().subtract(tempoRoteador, "minutes").utc().toDate();
+                const updatedAtV = new Date(ticket.updatedAt);
+
+                let settings = await CompaniesSettings.findOne({
+                  where: {
+                    companyId: ticket.companyId
+                  }
+                });
+                const sendGreetingMessageOneQueues = settings.sendGreetingMessageOneQueues === "enabled" || false;
+
+                if (!userId) {
+                  // ticket.userId is null, randomly select one of the provided userIds
+                  const randomUserId = getRandomUserId(userIds);
+
+
+                  if (randomUserId !== undefined && await findUserById(randomUserId, ticket.companyId) > 0) {
+                    // Update the ticket with the randomly selected userId
+                    //ticket.userId = randomUserId;
+                    //ticket.save();
+
+                    if (sendGreetingMessageOneQueues) {
+                      const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
+
+                      await SendWhatsAppMessage({ body: `\u200e *Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!`, ticket: ticketToSend });
+
+                    }
+
+                    await UpdateTicketService({
+                      ticketData: { status: "pending", userId: randomUserId },
+                      ticketId: ticket.id,
+                      companyId: ticket.companyId,
+
+                    });
+
+                    //await ticket.reload();
+                    logger.info(`Ticket ID ${ticket.id} atualizado para UserId ${randomUserId} - ${ticket.updatedAt}`);
+                  } else {
+                    //logger.info(`Ticket ID ${ticket.id} NOT updated with UserId ${randomUserId} - ${ticket.updatedAt}`);            
+                  }
+
+                } else if (userIds.includes(userId)) {
+                  if (tempoPassadoB > updatedAtV) {
+                    // ticket.userId is present and is in userIds, exclude it from random selection
+                    const availableUserIds = userIds.filter((id) => id !== userId);
+
+                    if (availableUserIds.length > 0) {
+                      // Randomly select one of the remaining userIds
+                      const randomUserId = getRandomUserId(availableUserIds);
+
+                      if (randomUserId !== undefined && await findUserById(randomUserId, ticket.companyId) > 0) {
+                        // Update the ticket with the randomly selected userId
+                        //ticket.userId = randomUserId;
+                        //ticket.save();
+
+                        if (sendGreetingMessageOneQueues) {
+
+                          const ticketToSend = await ShowTicketService(ticket.id, ticket.companyId);
+                          await SendWhatsAppMessage({ body: "*Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!", ticket: ticketToSend });
+                        };
+
+                        await UpdateTicketService({
+                          ticketData: { status: "pending", userId: randomUserId },
+                          ticketId: ticket.id,
+                          companyId: ticket.companyId,
+
+                        });
+
+                        logger.info(`Ticket ID ${ticket.id} atualizado para UserId ${randomUserId} - ${ticket.updatedAt}`);
+                      } else {
+                        //logger.info(`Ticket ID ${ticket.id} NOT updated with UserId ${randomUserId} - ${ticket.updatedAt}`);            
+                      }
+
+                    }
+                  }
+                }
+
+              }
+            }
+          })
+        })
+      }
     } catch (e) {
       Sentry.captureException(e);
-      logger.error("❌ Erro no handleRandomUser:", e.message);
+      logger.error("SearchForUsersRandom -> VerifyUsersRandom: error", e.message);
       throw e;
     }
+
   });
 
   jobR.start();
@@ -1443,170 +1580,78 @@ async function handleWhatsapp() {
   }, null, false, 'America/Sao_Paulo')
   jobW.start();
 }
-
 async function handleInvoiceCreate() {
   const job = new CronJob('0 * * * * *', async () => {
-    try {
-      console.log('Running invoice creation job at:', moment().format());
 
-      // Fetch all companies
-      const companies = await Company.findAll();
 
-      // Process each company
-      await Promise.all(companies.map(async (company) => {
-        const dueDate = moment(company.dueDate).format('DD/MM/yyyy');
-        const today = moment().format('DD/MM/yyyy');
-        const diff = moment(dueDate, 'DD/MM/yyyy').diff(moment(today, 'DD/MM/yyyy'));
-        const daysUntilDue = moment.duration(diff).asDays();
+    const companies = await Company.findAll();
+    companies.map(async c => {
+      var dueDate = c.dueDate;
+      const date = moment(dueDate).format();
+      const timestamp = moment().format();
+      const hoje = moment(moment()).format("DD/MM/yyyy");
+      var vencimento = moment(dueDate).format("DD/MM/yyyy");
 
-        // Check if due date is within 20 days
-        if (daysUntilDue < 20) {
-          const plan = await Plan.findByPk(company.planId);
-          if (!plan) {
-            console.warn(`No plan found for company ${company.id}`);
-            return;
-          }
+      var diff = moment(vencimento, "DD/MM/yyyy").diff(moment(hoje, "DD/MM/yyyy"));
+      var dias = moment.duration(diff).asDays();
 
-          // Check if invoice already exists for the due date
-          const sqlCheck = `
-            SELECT COUNT(*) as mycount 
-            FROM "Invoices" 
-            WHERE "companyId" = :companyId 
-            AND "dueDate"::text LIKE :dueDate;
-          `;
-          const invoice = await sequelize.query<{ mycount: number }>(
-            sqlCheck,
-            {
-              type: QueryTypes.SELECT,
-              replacements: {
-                companyId: company.id,
-                dueDate: `${moment(company.dueDate).format('yyyy-MM-DD')}%`,
-              },
-            }
+      if (dias < 20) {
+        const plan = await Plan.findByPk(c.planId);
+
+        const sql = `SELECT COUNT(*) mycount FROM "Invoices" WHERE "companyId" = ${c.id} AND "dueDate"::text LIKE '${moment(dueDate).format("yyyy-MM-DD")}%';`
+        const invoice = await sequelize.query(sql,
+          { type: QueryTypes.SELECT }
+        );
+        if (invoice[0]['mycount'] > 0) {
+
+        } else {
+          const sql = `INSERT INTO "Invoices" (detail, status, value, "updatedAt", "createdAt", "dueDate", "companyId")
+          VALUES ('${plan.name}', 'open', '${plan.amount}', '${timestamp}', '${timestamp}', '${date}', ${c.id});`
+
+          const invoiceInsert = await sequelize.query(sql,
+            { type: QueryTypes.INSERT }
           );
 
-          if (invoice[0].mycount > 0) {
-            console.log(`Invoice already exists for company ${company.id} on due date ${dueDate}`);
-            return;
-          }
-
-          // Insert new invoice
-          const timestamp = moment().format();
-          const sqlInsert = `
-            INSERT INTO "Invoices" (detail, status, value, "updatedAt", "createdAt", "dueDate", "companyId")
-            VALUES (:detail, 'open', :value, :updatedAt, :createdAt, :dueDate, :companyId);
-          `;
-          await sequelize.query(
-            sqlInsert,
-            {
-              type: QueryTypes.INSERT,
-              replacements: {
-                detail: plan.name,
-                value: plan.amount, // Ensure plan.amount is a number in the database
-                updatedAt: timestamp,
-                createdAt: timestamp,
-                dueDate: moment(company.dueDate).format('yyyy-MM-DD'),
-                companyId: company.id,
-              },
-            }
-          );
-          console.log(`Invoice created for company ${company.id}`);
-
-          // Configure email transporter
-          const transporter = nodemailer.createTransport({
-            host: process.env.MAIL_HOST,
-            port: Number(process.env.MAIL_PORT) || 587,
-            secure: process.env.SMTP_SECURE === 'true',
+/*           let transporter = nodemailer.createTransport({
+            service: 'gmail',
             auth: {
-              user: process.env.MAIL_USER,
-              pass: process.env.MAIL_PASS,
-            },
+              user: 'email@gmail.com',
+              pass: 'senha'
+            }
           });
 
-          // Convert plan.amount to number for toFixed
-          const amount = typeof plan.amount === 'string' ? parseFloat(plan.amount) : plan.amount;
+          const mailOptions = {
+            from: 'heenriquega@gmail.com', // sender address
+            to: `${c.email}`, // receiver (use array of string for a list)
+            subject: 'Fatura gerada - Sistema', // Subject line
+            html: `Olá ${c.name} esté é um email sobre sua fatura!<br>
+<br>
+Vencimento: ${vencimento}<br>
+Valor: ${plan.value}<br>
+Link: ${process.env.FRONTEND_URL}/financeiro<br>
+<br>
+Qualquer duvida estamos a disposição!
+            `// plain text body
+          };
 
-          // HTML email template
-          const htmlContent = `
-  <div style="font-family: 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: auto; padding: 40px 30px; background: linear-gradient(180deg, #ffffff, #f4f6f9); color: #333; border-radius: 12px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);">
-    
-    <!-- Logo -->
-    <div style="text-align: center; margin-bottom: 20px;">
-      <img src="${process.env.FRONTEND_URL}/logo.png" alt="Sua Empresa" style="max-width: 150px;">
-    </div>
+          transporter.sendMail(mailOptions, (err, info) => {
+            if (err)
+              console.log(err)
+            else
+              console.log(info);
+          }); */
 
-    <!-- Título -->
-    <div style="text-align: center; margin-bottom: 30px;">
-      <h1 style="color: #2c3e50; font-size: 26px; margin: 0;">🎉 Sua nova fatura está disponível</h1>
-      <p style="font-size: 16px; color: #555; margin-top: 8px;">Confira os detalhes abaixo</p>
-    </div>
-
-    <!-- Saudação -->
-    <p style="font-size: 16px;">Olá, <strong>${company.name}</strong>,</p>
-
-    <p style="font-size: 15px; line-height: 1.6;">
-      Uma nova fatura foi gerada para sua conta. Fique atento ao vencimento para evitar atrasos.
-    </p>
-
-    <!-- Bloco de Detalhes -->
-    <div style="background-color: #ffffff; padding: 20px; border-radius: 10px; border: 1px solid #e0e0e0; margin: 25px 0;">
-      <p style="margin: 12px 0; font-size: 15px;"><strong>🧾 Plano:</strong> ${plan.name}</p>
-      <p style="margin: 12px 0; font-size: 15px;"><strong>💰 Valor:</strong> <span style="color: #27ae60;">R$ ${amount.toFixed(2)}</span></p>
-      <p style="margin: 12px 0; font-size: 15px;"><strong>📅 Vencimento:</strong> ${dueDate}</p>
-    </div>
-
-    <!-- Botão -->
-    <div style="text-align: center; margin: 30px 0;">
-      <a href="${process.env.FRONTEND_URL}/financeiro" 
-         style="background-color: #2ecc71; color: white; text-decoration: none; padding: 14px 28px; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block; transition: background 0.3s;">
-        💼 Visualizar Fatura
-      </a>
-    </div>
-
-    <!-- Ajuda -->
-    <p style="font-size: 14px; color: #666; text-align: center;">
-      Precisa de ajuda? Nossa equipe está pronta para te atender.
-    </p>
-
-    <!-- Link alternativo -->
-    <p style="font-size: 13px; color: #888; margin-top: 30px;">
-      🔗 Se o botão acima não funcionar, copie e cole este link no navegador:<br>
-      <a href="${process.env.FRONTEND_URL}/financeiro" style="color: #3498db;">${process.env.FRONTEND_URL}/financeiro</a>
-    </p>
-
-    <!-- Rodapé -->
-    <hr style="border: none; border-top: 1px solid #ddd; margin: 40px 0;">
-
-    <footer style="text-align: center; font-size: 12px; color: #aaa;">
-      © ${new Date().getFullYear()} Sua Empresa. Todos os direitos reservados.<br>
-      <a href="${process.env.FRONTEND_URL}/suporte" style="color: #aaa; text-decoration: underline;">Suporte</a> |
-      <a href="${process.env.FRONTEND_URL}/politica-de-privacidade" style="color: #aaa; text-decoration: underline;">Política de Privacidade</a>
-    </footer>
-  </div>
-`;
-
-
-          // Send email
-          try {
-            await transporter.sendMail({
-              from: process.env.SMTP_FROM || process.env.MAIL_USER,
-              to: company.email,
-              subject: 'Fatura Gerada - Sistema',
-              text: `Olá ${company.name},\n\nUma nova fatura foi gerada!\n\nVencimento: ${dueDate}\nValor: R$ ${amount.toFixed(2)}\nLink: ${process.env.FRONTEND_URL}/financeiro\n\nQualquer dúvida, estamos à disposição!`,
-              html: htmlContent,
-            });
-            console.log(`Invoice email sent to ${company.email}`);
-          } catch (error) {
-            console.error(`Failed to send invoice email to ${company.email}:`, error);
-          }
         }
-      }));
-    } catch (error) {
-      console.error('Error in invoice creation job:', error);
-    }
-  });
 
-  job.start();
+
+
+
+
+      }
+
+    });
+  });
+  job.start()
 }
 
 
@@ -1674,25 +1719,3 @@ export async function startQueueProcess() {
     }
   );
 }
-
-// Adicione uma nova função para limpeza automática
-
-const handleCleanManualTransferCache = async () => {
-  logger.info("🧹 Iniciando job de limpeza da cache de transferências manuais");
-
-  const jobClean = new CronJob('0 */30 * * * *', async () => { // A cada 30 minutos
-    try {
-      const statsBefore = manualTransferCache.getStats();
-      manualTransferCache.cleanOldTransfers();
-      const statsAfter = manualTransferCache.getStats();
-      
-      logger.info(`📊 Cache limpa - Antes: ${statsBefore.total}, Depois: ${statsAfter.total}, Protegidos: ${statsAfter.protected}`);
-    } catch (error) {
-      logger.error("❌ Erro na limpeza da cache:", error);
-    }
-  });
-
-  jobClean.start();
-};
-
-handleCleanManualTransferCache();

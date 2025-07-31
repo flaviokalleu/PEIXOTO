@@ -10,7 +10,7 @@ import path from "path";
 import fs from 'fs';
 
 const ImportContactsService = async (companyId: number): Promise<void> => {
-  const defaultWhatsapp = await GetDefaultWhatsApp(companyId);
+  const defaultWhatsapp = await GetDefaultWhatsApp(undefined, companyId);
   const wbot = getWbot(defaultWhatsapp.id);
 
   let phoneContacts;
