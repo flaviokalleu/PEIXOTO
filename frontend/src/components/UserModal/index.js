@@ -118,7 +118,7 @@ const UserSchema = Yup.object().shape({
 	allHistoric: Yup.string().nullable(),
 });
 
-const UserModal = ({ open, onClose, userId }) => {
+const UserModal = ({ open, onClose, userId, onImageUpdate }) => {
 	const classes = useStyles();
 
 	const initialState = {
@@ -183,6 +183,8 @@ const UserModal = ({ open, onClose, userId }) => {
 	const handleClose = () => {
 		onClose();
 		setUser(initialState);
+		setAvatar(null);
+		setProfileUrl(null);
 	};
 
 	const handleTabChange = (event, newValue) => {
@@ -200,7 +202,12 @@ const UserModal = ({ open, onClose, userId }) => {
 			const { data } = await api.post(`/users/${file.id}/media-upload`, formData);
 
 			localStorage.setItem("profileImage", data.user.profileImage);
-
+			
+			// Atualizar a URL da imagem de perfil no layout
+			if (onImageUpdate && data.user.profileImage) {
+				const newProfileUrl = `${backendUrl}/public/company${data.user.companyId}/user/${data.user.profileImage}`;
+				onImageUpdate(newProfileUrl);
+			}
 		}
 
 
@@ -215,13 +222,15 @@ const UserModal = ({ open, onClose, userId }) => {
 			if (userId) {
 				const { data } = await api.put(`/users/${userId}`, userData);
 				console.log("avatar", avatar, user?.profileImage, avatar?.name)
-				if (avatar && (!user?.profileImage || !user?.profileImage !== avatar.name))// getBasename(avatar)))
+				if (avatar) {
 					uploadAvatar(data)
+				}
 			} else {
-				await api.post("/users", userData);
+				const { data } = await api.post("/users", userData);
 
-				if (!user?.profileImage && avatar)
-					uploadAvatar(user)
+				if (avatar) {
+					uploadAvatar(data)
+				}
 			}
 			if (userId === loggedInUser.id) {
 				handleClose();

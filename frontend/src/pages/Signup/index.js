@@ -59,7 +59,7 @@ const SignUp = () => {
   useEffect(() => {
     const fetchUserCreationStatus = async () => {
       try {
-        const response = await fetch(`${backendUrl}/settings/userCreation`, {
+        const response = await fetch(`${backendUrl}/public-settings/userCreation`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -71,7 +71,7 @@ const SignUp = () => {
         }
 
         const data = await response.json();
-        const isEnabled = data.userCreation === "enabled";
+        const isEnabled = data.value === "enabled";
         setUserCreationEnabled(isEnabled);
 
         // Redirecionar para /login se userCreation estiver desabilitado

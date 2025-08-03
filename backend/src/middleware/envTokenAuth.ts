@@ -14,9 +14,14 @@ const envTokenAuth = (
   try {
     const { token: bodyToken } = req.body as TokenPayload;
     const { token: queryToken } = req.query as TokenPayload;
+    const { settingKey } = req.params;
 
     console.log("|========= | middleware | ========|", req.query)
 
+    // Permitir acesso público à configuração userCreation
+    if (settingKey === "userCreation") {
+      return next();
+    }
     
     if (queryToken === process.env.ENV_TOKEN) {
       return next();

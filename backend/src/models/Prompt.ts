@@ -50,8 +50,8 @@ class Prompt extends Model<Prompt> {
   @Column({ defaultValue: 0 })
   totalTokens: number;
 
-  @AllowNull(false)
-  @Column
+  @AllowNull(true)
+  @Column({ defaultValue: "pt-BR" })
   voice: string;
 
   @AllowNull(true)

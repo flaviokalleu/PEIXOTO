@@ -97,14 +97,14 @@ export default async function DashboardDataService(
           from traking  tt
           inner join "UserRatings" ur on ur."ticketId" = tt."ticketId"
           where tt.rated = true 
-            and ur."rate" > 8
+            and ur."rate" = 3
         ) "npsPromotersPerc",
         (select 
               (100*count(tt.*))/NULLIF((select count(*) total from traking tt inner join "UserRatings" ur on ur."ticketId" = tt."ticketId" where rated= true),0)
             from traking  tt
             inner join "UserRatings" ur on ur."ticketId" = tt."ticketId"
             where tt.rated = true 
-              and ur."rate" in (7,8)
+              and ur."rate" = 2
           ) "npsPassivePerc",
           (
             select 
@@ -112,7 +112,7 @@ export default async function DashboardDataService(
             from traking  tt
             inner join "UserRatings" ur on ur."ticketId" = tt."ticketId"
             where tt.rated = true 
-              and ur."rate" < 7
+              and ur."rate" in (0,1)
           ) "npsDetractorsPerc",
           (
             select sum(nps.promoter) - sum(nps.detractor) from (
@@ -122,14 +122,14 @@ export default async function DashboardDataService(
                         from traking tt
                         inner join "UserRatings" ur on ur."ticketId" = tt."ticketId"
                     where tt.rated =true 
-                    and ur."rate" > 8
+                    and ur."rate" = 3
               union
               select 
                           0,(100*count(tt.*))/NULLIF((select count(*) total from traking tt inner join "UserRatings" ur on ur."ticketId" = tt."ticketId" where rated= true),0)
                         from traking  tt
                         inner join "UserRatings" ur on ur."ticketId" = tt."ticketId"
                     where tt.rated =true 
-                    and ur.rate < 7)) nps
+                    and ur.rate in (0,1))) nps
             ) "npsScore"
     ),
     attedants as (

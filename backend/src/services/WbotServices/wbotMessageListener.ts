@@ -2554,8 +2554,8 @@ export const handleRating = async (
   if (rate < 0) {
     finalRate = 0;
   }
-  if (rate > 10) {
-    finalRate = 10;
+  if (rate > 3) {
+    finalRate = 3;
   }
 
   await UserRating.create({
@@ -2563,6 +2563,12 @@ export const handleRating = async (
     companyId: ticketTraking.companyId,
     userId: ticketTraking.userId,
     rate: finalRate
+  });
+
+  // Atualizar o ticketTraking com a data do rating e marcar como avaliado
+  await ticketTraking.update({
+    ratingAt: new Date(),
+    rated: true
   });
 
   if (
@@ -3751,8 +3757,25 @@ const handleMessage = async (
         console.log("log... 3226");
         console.log("log... 3227", { ticketTraking});
         if (ticketTraking !== null && verifyRating(ticketTraking)) {
-          handleRating(parseFloat(bodyMessage), ticket, ticketTraking);
-          return;
+          // Extrair apenas o número da mensagem, removendo prefixos como "*Nome:*\n"
+          const cleanMessage = bodyMessage.replace(/^\*.*?\*\s*\n?/, '').trim();
+          const rating = parseFloat(cleanMessage);
+          
+          console.log("log... rating extraction", { bodyMessage, cleanMessage, rating });
+          
+          // Validar se é um número válido entre 0 e 3
+          if (!isNaN(rating) && rating >= 0 && rating <= 3) {
+            handleRating(rating, ticket, ticketTraking);
+            return;
+          } else {
+            // Se não for um rating válido, enviar mensagem de orientação apenas uma vez
+            const invalidRatingMessage = "Por favor, envie uma nota de 0 a 3 para avaliar o atendimento.";
+            if (ticket.channel === "whatsapp") {
+              const msg = await SendWhatsAppMessage({ body: invalidRatingMessage, ticket });
+              await verifyMessage(msg, ticket, ticket.contact, ticketTraking);
+            }
+            return;
+          }
         }
       }
     } catch (e) {

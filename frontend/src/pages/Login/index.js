@@ -21,7 +21,7 @@ export default function Login() {
   useEffect(() => {
     const fetchUserCreationStatus = async () => {
       try {
-        const response = await fetch(`${backendUrl}/settings/userCreation`, {
+        const response = await fetch(`${backendUrl}/public-settings/userCreation`, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
@@ -33,7 +33,7 @@ export default function Login() {
         }
 
         const data = await response.json();
-        setUserCreationEnabled(data.userCreation === "enabled");
+        setUserCreationEnabled(data.value === "enabled");
       } catch (err) {
         console.error("Erro ao verificar userCreation:", err);
         setUserCreationEnabled(false); // Esconder botão em caso de erro

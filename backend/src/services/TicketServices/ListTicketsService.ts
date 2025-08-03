@@ -398,6 +398,8 @@ const ListTicketsService = async ({
 
       if (searchParam) {
         const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
+        const originalSearchParam = searchParam.toLowerCase().trim();
+        
         if (searchOnMessages === "true") {
           includeCondition = [
             ...includeCondition,
@@ -406,12 +408,22 @@ const ListTicketsService = async ({
               as: "messages",
               attributes: ["id", "body"],
               where: {
-                body: where(
-                  fn("LOWER", fn('unaccent', col("body"))),
-                  "LIKE",
-                  `%${sanitizedSearchParam}%`
-                ),
-                // ticketId: 
+                [Op.or]: [
+                  {
+                    body: where(
+                      fn("LOWER", fn('unaccent', col("body"))),
+                      "LIKE",
+                      `%${sanitizedSearchParam}%`
+                    )
+                  },
+                  {
+                    body: where(
+                      fn("LOWER", col("body")),
+                      "LIKE",
+                      `%${originalSearchParam}%`
+                    )
+                  }
+                ]
               },
               required: false,
               duplicating: false
@@ -427,12 +439,32 @@ const ListTicketsService = async ({
                   `%${sanitizedSearchParam}%`
                 )
               },
-              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
+              {
+                "$contact.name$": where(
+                  fn("LOWER", col("contact.name")),
+                  "LIKE",
+                  `%${originalSearchParam}%`
+                )
+              },
+              { 
+                "$contact.number$": where(
+                  fn("LOWER", col("contact.number")),
+                  "LIKE",
+                  `%${originalSearchParam}%`
+                )
+              },
               {
                 "$message.body$": where(
                   fn("LOWER", fn("unaccent", col("body"))),
                   "LIKE",
                   `%${sanitizedSearchParam}%`
+                )
+              },
+              {
+                "$message.body$": where(
+                  fn("LOWER", col("body")),
+                  "LIKE",
+                  `%${originalSearchParam}%`
                 )
               }
             ]
@@ -448,14 +480,20 @@ const ListTicketsService = async ({
                   `%${sanitizedSearchParam}%`
                 )
               },
-              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
-              // {
-              //   "$message.body$": where(
-              //     fn("LOWER", fn("unaccent", col("body"))),
-              //     "LIKE",
-              //     `%${sanitizedSearchParam}%`
-              //   )
-              // }
+              {
+                "$contact.name$": where(
+                  fn("LOWER", col("contact.name")),
+                  "LIKE",
+                  `%${originalSearchParam}%`
+                )
+              },
+              { 
+                "$contact.number$": where(
+                  fn("LOWER", col("contact.number")),
+                  "LIKE",
+                  `%${originalSearchParam}%`
+                )
+              }
             ]
           };
         }
@@ -534,24 +572,39 @@ const ListTicketsService = async ({
         }
       }
 
-  // Aplicar filtro de usuário se não for admin com permissão total
-  if (!canShowAll) {
+  // Para status de busca, aplicar filtros mais restritivos para retornar apenas resultados precisos
+  if (status === "search" && searchParam) {
+    // Se há parâmetro de busca, os resultados devem corresponder EXATAMENTE ao termo
+    // Não aplicar condições de usuário/permissão que possam incluir tickets não relacionados
     whereCondition = {
       ...whereCondition,
-      [Op.or]: [
-        { userId: userId },
-        { 
-          status: ["pending", "group"],
-          queueId: { [Op.in]: userQueueIds }
-        }
-      ]
+      companyId
     };
+  } else {
+    // Para outros status, aplicar filtro de usuário se não for admin com permissão total
+    if (!canShowAll) {
+      whereCondition = {
+        ...whereCondition,
+        [Op.and]: [
+          {
+            [Op.or]: [
+              { userId: userId },
+              { 
+                status: ["pending", "group"],
+                queueId: { [Op.in]: userQueueIds }
+              }
+            ]
+          }
+        ],
+        companyId
+      };
+    } else {
+      whereCondition = {
+        ...whereCondition,
+        companyId
+      };
+    }
   }
-
-  whereCondition = {
-    ...whereCondition,
-    companyId
-  };
 
   const limit = 40;
   const offset = limit * (+pageNumber - 1);
@@ -567,12 +620,45 @@ const ListTicketsService = async ({
     subQuery: false
   });
 
+  // Para busca, filtrar apenas tickets que realmente correspondem aos critérios
+  let filteredTickets = tickets;
+  if (status === "search" && searchParam) {
+    const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
+    filteredTickets = tickets.filter(ticket => {
+      const contactName = removeAccents((ticket.contact?.name || "").toLowerCase());
+      const contactNumber = ticket.contact?.number || "";
+      
+      // Verificar se o nome ou número do contato contém o termo pesquisado
+      // Busca case-insensitive e sem acentos
+      const nameMatch = contactName.includes(sanitizedSearchParam);
+      const numberMatch = contactNumber.toLowerCase().includes(searchParam.toLowerCase());
+      
+      // Busca adicional: verificar se o termo original (com acentos) também corresponde
+      const originalContactName = (ticket.contact?.name || "").toLowerCase();
+      const originalSearchParam = searchParam.toLowerCase();
+      const nameMatchWithAccents = originalContactName.includes(originalSearchParam);
+      
+      // Se busca em mensagens está ativada, verificar também nas mensagens
+      if (searchOnMessages === "true" && ticket.messages) {
+        const messageMatch = ticket.messages.some(message => {
+          const messageBody = removeAccents((message.body || "").toLowerCase());
+          const originalMessageBody = (message.body || "").toLowerCase();
+          return messageBody.includes(sanitizedSearchParam) || 
+                 originalMessageBody.includes(originalSearchParam);
+        });
+        return nameMatch || numberMatch || nameMatchWithAccents || messageMatch;
+      }
+      
+      return nameMatch || numberMatch || nameMatchWithAccents;
+    });
+  }
+
   const hasMore = count > offset + tickets.length;
 
   return {
-    tickets,
-    count,
-    hasMore
+    tickets: filteredTickets,
+    count: status === "search" ? filteredTickets.length : count,
+    hasMore: status === "search" ? false : hasMore
   };
 };
 

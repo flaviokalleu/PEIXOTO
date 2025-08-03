@@ -38,7 +38,15 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
         throw new AppError(`${JSON.stringify(err, undefined, 2)}`);
     }
 
-    let promptTable = await Prompt.create(promptData);
+    // Define valores padrão para campos de voz se não fornecidos
+    const promptDataWithDefaults = {
+        ...promptData,
+        voice: promptData.voice || "pt-BR",
+        voiceKey: promptData.voiceKey || "",
+        voiceRegion: promptData.voiceRegion || "brazil"
+    };
+
+    let promptTable = await Prompt.create(promptDataWithDefaults);
     promptTable = await ShowPromptService({ promptId: promptTable.id, companyId });
 
     return promptTable;

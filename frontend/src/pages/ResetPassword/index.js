@@ -13,8 +13,9 @@ import {
 } from "@material-ui/core";
 import { makeStyles } from "@material-ui/core/styles";
 import React, { useState, useEffect } from "react";
-import { Link as RouterLink, useLocation, useHistory } from "react-router-dom";
+import { Link as RouterLink, useHistory, useParams } from "react-router-dom";
 import { toast } from "react-toastify";
+import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import api from "../../services/api";
 
@@ -165,12 +166,12 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const RedefinirSenha = () => {
-  const classes = useStyles();
-  const location = useLocation();
-  const history = useHistory();
-  const token = new URLSearchParams(location.search).get("token");
-  const [senha, setSenha] = useState("");
+const ResetPassword = () => {
+	const classes = useStyles();
+
+	const history = useHistory();
+	const { token } = useParams(); // Extrair token dos parâmetros da rota
+	const [password, setPassword] = useState("");
   const [confirmarSenha, setConfirmarSenha] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [enviado, setEnviado] = useState(false);
@@ -181,23 +182,23 @@ const RedefinirSenha = () => {
     setVisivel(true);
     if (!token) {
       setError("Token de redefinição ausente ou inválido. Por favor, solicite um novo link de redefinição.");
-      console.error("No token found in URL:", location.search);
+      console.error("No token found in URL");
     } else {
       console.log("Token extracted from URL:", token);
     }
-  }, [token, location.search]);
+  }, [token]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
     // Validate passwords
-    if (senha !== confirmarSenha) {
+    if (password !== confirmarSenha) {
       toast.error("As senhas não coincidem");
       setError("As senhas não coincidem");
       return;
     }
-    if (senha.length < 6) {
+    if (password.length < 6) {
       toast.error("A senha deve ter pelo menos 6 caracteres");
       setError("A senha deve ter pelo menos 6 caracteres");
       return;
@@ -209,7 +210,7 @@ const RedefinirSenha = () => {
     try {
       await api.post("/auth/reset-password", {
         token,
-        newPassword: senha,
+        password: password,
       });
       setEnviando(false);
       setEnviado(true);
@@ -248,13 +249,13 @@ const RedefinirSenha = () => {
                     variant="outlined"
                     required
                     fullWidth
-                    name="senha"
+                    name="password"
                     label="Nova Senha"
                     type="password"
-                    id="senha"
+                    id="password"
                     autoComplete="new-password"
-                    value={senha}
-                    onChange={(e) => setSenha(e.target.value)}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className={classes.textField}
                     disabled={enviando || enviado}
                   />
@@ -305,4 +306,4 @@ const RedefinirSenha = () => {
   );
 };
 
-export default RedefinirSenha;
+export default ResetPassword;

@@ -5,7 +5,7 @@
   "description": "Frontend do sistema",
   "author": "Sua Empresa",
   "scripts": {
-    "start": "set NODE_OPTIONS=--openssl-legacy-provider && set GENERATE_SOURCEMAP=false && react-scripts start",
+    "start": "export NODE_OPTIONS=--openssl-legacy-provider && export GENERATE_SOURCEMAP=false && react-scripts start",
     "prebuild": "node scripts/generate-manifest.js",
     "build": "export NODE_OPTIONS=\"--openssl-legacy-provider --max-old-space-size=4096\" && export GENERATE_SOURCEMAP=false && react-scripts build",
     "buildwin": "set NODE_OPTIONS=--openssl-legacy-provider --max-old-space-size=4096 && set GENERATE_SOURCEMAP=false && react-scripts build",

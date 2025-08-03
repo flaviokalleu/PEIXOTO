@@ -102,9 +102,9 @@ const messages = {
           ratedCalls: "Atendimentos avaliados",
           evaluationIndex: "Índice de avaliação",
           score: "Pontuação",
-          prosecutors: "Promotores",
-          neutral: "Neutros",
-          detractors: "Detratores",
+          prosecutors: "Excelente (3)",
+          neutral: "Bom (2)",
+          detractors: "Ruim (0-1)",
         },
       },
       reports: {

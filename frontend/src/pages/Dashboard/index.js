@@ -301,16 +301,16 @@ const Dashboard = () => {
 
           {/* NPS Section */}
           <div className="mb-12">
-            <h2 className="text-2xl font-semibold text-gray-800 mb-6">NPS</h2>
+            <h2 className="text-2xl font-semibold text-gray-800 mb-6">Sistema de Avaliação (0-3)</h2>
             <div className="space-y-6">
               {/* NPS Cards Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                 <div className="rounded-xl shadow-sm border border-gray-200 p-6">
                   <ChartDonut
                     data={[
-                      `{'name': 'Promotores', 'value': ${counters.npsPromotersPerc || 0}}`,
-                      `{'name': 'Detratores', 'value': ${counters.npsDetractorsPerc || 0}}`,
-                      `{'name': 'Neutros', 'value': ${counters.npsPassivePerc || 0}}`
+                      `{'name': 'Excelente (3)', 'value': ${counters.npsPromotersPerc || 0}}`,
+                      `{'name': 'Ruim (0-1)', 'value': ${counters.npsDetractorsPerc || 0}}`,
+                      `{'name': 'Bom (2)', 'value': ${counters.npsPassivePerc || 0}}`
                     ]}
                     value={counters.npsScore || 0}
                     title="Score"
@@ -319,24 +319,24 @@ const Dashboard = () => {
                 </div>
                 <div className="rounded-xl shadow-sm border border-gray-200 p-6">
                   <ChartDonut
-                    title={i18n.t("dashboard.assessments.prosecutors")}
+                    title="Excelente (3)"
                     value={counters.npsPromotersPerc || 0}
-                    data={[`{'name': 'Promotores', 'value': 100}`]}
+                    data={[`{'name': 'Excelente', 'value': 100}`]}
                     color={["#2EA85A"]}
                   />
                 </div>
                 <div className="rounded-xl shadow-sm border border-gray-200 p-6">
                   <ChartDonut
-                    data={[`{'name': 'Neutros', 'value': 100}`]}
-                    title={i18n.t("dashboard.assessments.neutral")}
+                    data={[`{'name': 'Bom', 'value': 100}`]}
+                    title="Bom (2)"
                     value={counters.npsPassivePerc || 0}
                     color={["#F7EC2C"]}
                   />
                 </div>
                 <div className="rounded-xl shadow-sm border border-gray-200 p-6">
                   <ChartDonut
-                    data={[`{'name': 'Detratores', 'value': 100}`]}
-                    title={i18n.t("dashboard.assessments.detractors")}
+                    data={[`{'name': 'Ruim', 'value': 100}`]}
+                    title="Ruim (0-1)"
                     value={counters.npsDetractorsPerc || 0}
                     color={["#F73A2C"]}
                   />
