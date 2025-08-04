@@ -66,24 +66,28 @@ const SignUp = () => {
           },
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch user creation status");
-        }
+        if (response.ok) {
+          const data = await response.json();
+          console.log("UserCreation data:", data);
+          
+          // Verificar se o valor é "enabled"
+          const isEnabled = data === "enabled" || (data && data.value === "enabled");
+          setUserCreationEnabled(isEnabled);
 
-        const data = await response.json();
-        const isEnabled = data.value === "enabled";
-        setUserCreationEnabled(isEnabled);
-
-        // Redirecionar para /login se userCreation estiver desabilitado
-        if (!isEnabled) {
-          toast.info("Cadastro de novos usuários está desabilitado.");
-          history.push("/login");
+          // Redirecionar para /login se userCreation estiver desabilitado
+          if (!isEnabled) {
+            toast.info("Cadastro de novos usuários está desabilitado.");
+            history.push("/login");
+          }
+        } else {
+          console.log("Could not fetch userCreation status, assuming enabled");
+          // Se não conseguir buscar, assumir que está habilitado (mesmo comportamento do login)
+          setUserCreationEnabled(true);
         }
       } catch (err) {
         console.error("Erro ao verificar userCreation:", err);
-        setUserCreationEnabled(false);
-        toast.error("Erro ao verificar permissão de cadastro.");
-        history.push("/login"); // Redirecionar em caso de erro
+        // Em caso de erro, assumir que está habilitado para não bloquear
+        setUserCreationEnabled(true);
       }
     };
 

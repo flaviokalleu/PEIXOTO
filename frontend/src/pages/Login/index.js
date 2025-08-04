@@ -9,7 +9,7 @@ export default function Login() {
   const [user, setUser] = useState({ email: "", password: "", remember: false });
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
-  const [userCreationEnabled, setUserCreationEnabled] = useState(true);
+  const [userCreationEnabled, setUserCreationEnabled] = useState(true); // Padrão true já que está habilitado
 
   // Determinar a URL do backend
   const backendUrl =
@@ -21,22 +21,30 @@ export default function Login() {
   useEffect(() => {
     const fetchUserCreationStatus = async () => {
       try {
-        const response = await fetch(`${backendUrl}/public-settings/userCreation`, {
+        const url = `${backendUrl}/public-settings/userCreation`;
+        console.log("Checking userCreation status at:", url);
+        
+        const response = await fetch(url, {
           method: "GET",
           headers: {
             "Content-Type": "application/json",
           },
         });
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch user creation status");
+        if (response.ok) {
+          const data = await response.json();
+          console.log("UserCreation data:", data);
+          
+          // Verificar se o valor é "enabled"
+          const isEnabled = data === "enabled" || (data && data.value === "enabled");
+          setUserCreationEnabled(isEnabled);
+        } else {
+          console.log("Could not fetch userCreation status, using default (enabled)");
+          // Manter como true (habilitado) se não conseguir buscar
         }
-
-        const data = await response.json();
-        setUserCreationEnabled(data.value === "enabled");
       } catch (err) {
-        console.error("Erro ao verificar userCreation:", err);
-        setUserCreationEnabled(false); // Esconder botão em caso de erro
+        console.log("Error fetching userCreation status, using default (enabled):", err.message);
+        // Manter como true (habilitado) em caso de erro
       }
     };
 

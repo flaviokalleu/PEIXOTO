@@ -12,12 +12,52 @@ import axios from 'axios';
 
 dotenv.config();
 
-// Configure Mercado Pago
-const accessToken = process.env.MP_ACCESS_TOKEN;
-
-// Verificar se o token está configurado
-if (!accessToken) {
-  console.error("❌ MP_ACCESS_TOKEN não está configurado nas variáveis de ambiente!");
+// Função para buscar o token do Mercado Pago
+async function getMercadoPagoToken(): Promise<string> {
+  console.log("🔍 Iniciando busca do token do Mercado Pago...");
+  
+  // Primeiro, tenta buscar nas variáveis de ambiente
+  let accessToken = process.env.MP_ACCESS_TOKEN;
+  
+  if (!accessToken || accessToken.trim() === '') {
+    console.log("🔍 Token não encontrado ou vazio no .env, buscando no banco de dados...");
+    
+    try {
+      // Busca no banco de dados na tabela Settings
+      const setting = await Setting.findOne({
+        where: { key: "mpaccesstoken" }
+      });
+      
+      if (setting && setting.value && setting.value.trim() !== '') {
+        accessToken = setting.value;
+        console.log("✅ Token do Mercado Pago encontrado no banco de dados");
+      } else {
+        console.log("❌ Token do Mercado Pago não encontrado ou vazio no banco de dados");
+      }
+    } catch (error) {
+      console.error("❌ Erro ao buscar token no banco:", error);
+    }
+  } else {
+    console.log("✅ Token do Mercado Pago encontrado no .env");
+  }
+  
+  if (!accessToken || accessToken.trim() === '') {
+    console.log("❌ Nenhum token válido encontrado!");
+    console.log("💡 Configure o token via:");
+    console.log("   1. Arquivo .env: MP_ACCESS_TOKEN=seu_token_aqui");
+    console.log("   2. API: POST /mercadopago/set-token");
+    console.log("   3. Banco: tabela Settings, key='mpaccesstoken'");
+    
+    throw new AppError("Token do Mercado Pago não configurado. Configure MP_ACCESS_TOKEN no .env ou use a API /mercadopago/set-token.", 500);
+  }
+  
+  // Validação básica do formato do token
+  if (!accessToken.startsWith('APP_USR-') && !accessToken.startsWith('TEST-')) {
+    console.log("⚠️ Token pode estar em formato incorreto. Tokens do MP começam com APP_USR- ou TEST-");
+  }
+  
+  console.log("✅ Token encontrado, formato:", accessToken.substring(0, 10) + "...");
+  return accessToken;
 }
 
 // Endpoint para criar uma nova assinatura
@@ -60,10 +100,8 @@ export const createSubscription = async (
   };
 
   try {
-    // Verificar se o token está configurado
-    if (!accessToken) {
-      throw new AppError("Token do Mercado Pago não configurado. Configure MP_ACCESS_TOKEN nas variáveis de ambiente.", 500);
-    }
+    // Buscar o token do Mercado Pago
+    const accessToken = await getMercadoPagoToken();
 
     console.log("🔄 Criando preferência de pagamento no Mercado Pago...");
     console.log("💰 Valor:", unitPrice);
@@ -73,7 +111,7 @@ export const createSubscription = async (
     const response = await axios.post('https://api.mercadopago.com/checkout/preferences', data, {
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${accessToken}` // Usando accessToken aqui
+        'Authorization': `Bearer ${accessToken}`
       }
     });
     
@@ -87,7 +125,7 @@ export const createSubscription = async (
     console.error("❌ Erro ao criar preferência de pagamento:", error.response?.data || error.message);
     
     if (error.response?.status === 401) {
-      throw new AppError("Token do Mercado Pago inválido. Verifique as credenciais.", 401);
+      throw new AppError("Token do Mercado Pago inválido. Verifique as credenciais.", 400);
     }
     
     throw new AppError("Problema encontrado, entre em contato com o suporte!", 400);
@@ -111,16 +149,15 @@ export const webhook = async (
 
   if (data && data.id) {
     try {
-      if (!accessToken) {
-        throw new AppError("Token do Mercado Pago não configurado.", 500);
-      }
+      // Buscar o token do Mercado Pago
+      const accessToken = await getMercadoPagoToken();
 
       console.log("🔍 Consultando pagamento ID:", data.id);
       
       const paymentResponse = await axios.get(`https://api.mercadopago.com/v1/payments/${data.id}`, {
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${accessToken}` // Usando accessToken aqui
+          'Authorization': `Bearer ${accessToken}`
         }
       });
 
@@ -178,5 +215,102 @@ export const webhook = async (
   }
 
   return res.json({ ok: true });
+};
+
+// Endpoint para testar o token do Mercado Pago
+export const testMercadoPagoToken = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    console.log("🔍 Testando token do Mercado Pago...");
+    
+    const accessToken = await getMercadoPagoToken();
+    console.log("Token encontrado:", accessToken ? "Sim" : "Não");
+    
+    // Testar o token fazendo uma requisição para a API do MP
+    const testResponse = await axios.get('https://api.mercadopago.com/users/me', {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`
+      }
+    });
+    
+    console.log("✅ Token válido! Usuário:", testResponse.data.email);
+    
+    return res.json({ 
+      valid: true, 
+      user: testResponse.data.email,
+      message: "Token do Mercado Pago válido!"
+    });
+  } catch (error) {
+    console.error("❌ Erro ao testar token:", error.response?.data || error.message);
+    
+    if (error.response?.status === 401) {
+      return res.status(401).json({ 
+        valid: false, 
+        error: "Token inválido ou expirado",
+        message: "Verifique se o token está correto e não expirou"
+      });
+    }
+    
+    return res.status(500).json({ 
+      valid: false, 
+      error: error.message,
+      message: "Erro ao validar token"
+    });
+  }
+};
+
+// Endpoint para configurar o token do Mercado Pago no banco
+export const setMercadoPagoToken = async (req: Request, res: Response): Promise<Response> => {
+  try {
+    const { token } = req.body;
+    const { companyId } = req.user;
+    
+    if (!token) {
+      throw new AppError("Token é obrigatório", 400);
+    }
+    
+    console.log("🔄 Configurando token do Mercado Pago no banco...");
+    
+    // Primeiro, testar se o token é válido
+    const testResponse = await axios.get('https://api.mercadopago.com/users/me', {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    console.log("✅ Token válido! Salvando no banco...");
+    
+    // Salvar no banco
+    const [setting] = await Setting.findOrCreate({
+      where: { 
+        key: "mpaccesstoken",
+        companyId
+      },
+      defaults: {
+        key: "mpaccesstoken",
+        value: token,
+        companyId
+      }
+    });
+    
+    if (!setting.isNewRecord) {
+      await setting.update({ value: token });
+    }
+    
+    console.log("✅ Token salvo com sucesso!");
+    
+    return res.json({ 
+      success: true, 
+      user: testResponse.data.email,
+      message: "Token configurado com sucesso!"
+    });
+  } catch (error) {
+    console.error("❌ Erro ao configurar token:", error.response?.data || error.message);
+    
+    if (error.response?.status === 401) {
+      throw new AppError("Token inválido. Verifique se o token está correto.", 400);
+    }
+    
+    throw new AppError("Erro ao configurar token: " + error.message, 500);
+  }
 };
 

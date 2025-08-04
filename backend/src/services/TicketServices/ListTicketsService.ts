@@ -226,13 +226,7 @@ const ListTicketsService = async ({
             };
           }
 
-  // Verifica se o usuário tem permissão para ver todos os tickets
-  const canShowAll = showAll === "true" && 
-    user.profile === "admin" && 
-    user.allUserChat === "enabled" && 
-    user.allHistoric === "enabled";
-
-  if (canShowAll && status !== "search") {
+  if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {
     if (user.allHistoric === "enabled" && showTicketWithoutQueue) {
       whereCondition = { companyId };
     } else if (user.allHistoric === "enabled" && !showTicketWithoutQueue) {
@@ -248,7 +242,7 @@ const ListTicketsService = async ({
   if (status && status !== "search") {
     whereCondition = {
       ...whereCondition,
-      status: canShowAll && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
+      status: showAll === "true" && status === "pending" ? { [Op.or]: [status, "lgpd"] } : status
     };
   }
 
@@ -262,7 +256,7 @@ const ListTicketsService = async ({
         status: "closed",
       }
 
-      if (user.profile !== "admin" || showAll === "false") {
+      if (showAll === "false" && user.profile === "admin") {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
@@ -271,7 +265,7 @@ const ListTicketsService = async ({
       } else {
         whereCondition2 = {
           ...whereCondition2,
-          queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+          queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
         }
       }
 
@@ -287,7 +281,7 @@ const ListTicketsService = async ({
         status: "closed",
       }
 
-      if (user.profile !== "admin" || showAll === "false") {
+      if (showAll === "false" && (user.profile === "admin" || user.allUserChat === "enabled")) {
         whereCondition2 = {
           ...whereCondition2,
           queueId: queueIds,
@@ -296,7 +290,7 @@ const ListTicketsService = async ({
       } else {
         whereCondition2 = {
           ...whereCondition2,
-          queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+          queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
         }
       }
 
@@ -326,7 +320,7 @@ const ListTicketsService = async ({
           attributes: ['companyId', 'contactId', 'whatsappId', [literal('MAX("id")'), 'id']],
           where: {
             [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
-            queueId: canShowAll || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
+            queueId: showAll === "true" || showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : queueIds,
             companyId
           },
           group: ['companyId', 'contactId', 'whatsappId'],
@@ -337,7 +331,7 @@ const ListTicketsService = async ({
           [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }]
         }
 
-        if (user.profile !== "admin" || showAll === "false") {
+        if (showAll === "false" && user.profile === "admin") {
           whereCondition2 = {
             ...whereCondition2,
             queueId: queueIds,
@@ -345,7 +339,7 @@ const ListTicketsService = async ({
             // [Op.or]: [{ userId }, { status: ["pending", "closed", "group"] }],
           }
 
-        } else if (canShowAll) {
+        } else if (showAll === "true" && user.profile === "admin") {
           whereCondition2 = {
             companyId,
             queueId: { [Op.or]: [queueIds, null] },
@@ -398,8 +392,6 @@ const ListTicketsService = async ({
 
       if (searchParam) {
         const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
-        const originalSearchParam = searchParam.toLowerCase().trim();
-        
         if (searchOnMessages === "true") {
           includeCondition = [
             ...includeCondition,
@@ -408,22 +400,12 @@ const ListTicketsService = async ({
               as: "messages",
               attributes: ["id", "body"],
               where: {
-                [Op.or]: [
-                  {
-                    body: where(
-                      fn("LOWER", fn('unaccent', col("body"))),
-                      "LIKE",
-                      `%${sanitizedSearchParam}%`
-                    )
-                  },
-                  {
-                    body: where(
-                      fn("LOWER", col("body")),
-                      "LIKE",
-                      `%${originalSearchParam}%`
-                    )
-                  }
-                ]
+                body: where(
+                  fn("LOWER", fn('unaccent', col("body"))),
+                  "LIKE",
+                  `%${sanitizedSearchParam}%`
+                ),
+                // ticketId: 
               },
               required: false,
               duplicating: false
@@ -439,32 +421,12 @@ const ListTicketsService = async ({
                   `%${sanitizedSearchParam}%`
                 )
               },
-              {
-                "$contact.name$": where(
-                  fn("LOWER", col("contact.name")),
-                  "LIKE",
-                  `%${originalSearchParam}%`
-                )
-              },
-              { 
-                "$contact.number$": where(
-                  fn("LOWER", col("contact.number")),
-                  "LIKE",
-                  `%${originalSearchParam}%`
-                )
-              },
+              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
               {
                 "$message.body$": where(
                   fn("LOWER", fn("unaccent", col("body"))),
                   "LIKE",
                   `%${sanitizedSearchParam}%`
-                )
-              },
-              {
-                "$message.body$": where(
-                  fn("LOWER", col("body")),
-                  "LIKE",
-                  `%${originalSearchParam}%`
                 )
               }
             ]
@@ -480,20 +442,14 @@ const ListTicketsService = async ({
                   `%${sanitizedSearchParam}%`
                 )
               },
-              {
-                "$contact.name$": where(
-                  fn("LOWER", col("contact.name")),
-                  "LIKE",
-                  `%${originalSearchParam}%`
-                )
-              },
-              { 
-                "$contact.number$": where(
-                  fn("LOWER", col("contact.number")),
-                  "LIKE",
-                  `%${originalSearchParam}%`
-                )
-              }
+              { "$contact.number$": { [Op.like]: `%${sanitizedSearchParam}%` } },
+              // {
+              //   "$message.body$": where(
+              //     fn("LOWER", fn("unaccent", col("body"))),
+              //     "LIKE",
+              //     `%${sanitizedSearchParam}%`
+              //   )
+              // }
             ]
           };
         }
@@ -564,7 +520,7 @@ const ListTicketsService = async ({
           ]
         };
 
-        if (status === "group" && (user.allowGroup || canShowAll)) {
+        if (status === "group" && (user.allowGroup || showAll === "true")) {
           whereCondition = {
             ...whereCondition,
             queueId: { [Op.or]: [userQueueIds, null] },
@@ -572,39 +528,10 @@ const ListTicketsService = async ({
         }
       }
 
-  // Para status de busca, aplicar filtros mais restritivos para retornar apenas resultados precisos
-  if (status === "search" && searchParam) {
-    // Se há parâmetro de busca, os resultados devem corresponder EXATAMENTE ao termo
-    // Não aplicar condições de usuário/permissão que possam incluir tickets não relacionados
-    whereCondition = {
-      ...whereCondition,
-      companyId
-    };
-  } else {
-    // Para outros status, aplicar filtro de usuário se não for admin com permissão total
-    if (!canShowAll) {
-      whereCondition = {
-        ...whereCondition,
-        [Op.and]: [
-          {
-            [Op.or]: [
-              { userId: userId },
-              { 
-                status: ["pending", "group"],
-                queueId: { [Op.in]: userQueueIds }
-              }
-            ]
-          }
-        ],
-        companyId
-      };
-    } else {
-      whereCondition = {
-        ...whereCondition,
-        companyId
-      };
-    }
-  }
+  whereCondition = {
+    ...whereCondition,
+    companyId
+  };
 
   const limit = 40;
   const offset = limit * (+pageNumber - 1);
@@ -620,45 +547,12 @@ const ListTicketsService = async ({
     subQuery: false
   });
 
-  // Para busca, filtrar apenas tickets que realmente correspondem aos critérios
-  let filteredTickets = tickets;
-  if (status === "search" && searchParam) {
-    const sanitizedSearchParam = removeAccents(searchParam.toLocaleLowerCase().trim());
-    filteredTickets = tickets.filter(ticket => {
-      const contactName = removeAccents((ticket.contact?.name || "").toLowerCase());
-      const contactNumber = ticket.contact?.number || "";
-      
-      // Verificar se o nome ou número do contato contém o termo pesquisado
-      // Busca case-insensitive e sem acentos
-      const nameMatch = contactName.includes(sanitizedSearchParam);
-      const numberMatch = contactNumber.toLowerCase().includes(searchParam.toLowerCase());
-      
-      // Busca adicional: verificar se o termo original (com acentos) também corresponde
-      const originalContactName = (ticket.contact?.name || "").toLowerCase();
-      const originalSearchParam = searchParam.toLowerCase();
-      const nameMatchWithAccents = originalContactName.includes(originalSearchParam);
-      
-      // Se busca em mensagens está ativada, verificar também nas mensagens
-      if (searchOnMessages === "true" && ticket.messages) {
-        const messageMatch = ticket.messages.some(message => {
-          const messageBody = removeAccents((message.body || "").toLowerCase());
-          const originalMessageBody = (message.body || "").toLowerCase();
-          return messageBody.includes(sanitizedSearchParam) || 
-                 originalMessageBody.includes(originalSearchParam);
-        });
-        return nameMatch || numberMatch || nameMatchWithAccents || messageMatch;
-      }
-      
-      return nameMatch || numberMatch || nameMatchWithAccents;
-    });
-  }
-
   const hasMore = count > offset + tickets.length;
 
   return {
-    tickets: filteredTickets,
-    count: status === "search" ? filteredTickets.length : count,
-    hasMore: status === "search" ? false : hasMore
+    tickets,
+    count,
+    hasMore
   };
 };
 

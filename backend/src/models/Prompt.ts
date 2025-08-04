@@ -62,6 +62,9 @@ class Prompt extends Model<Prompt> {
   @Column
   voiceRegion:string;
 
+  @Column({ defaultValue: "gpt-3.5-turbo-1106" })
+  model: string;
+
   @AllowNull
   @ForeignKey(() => Queue)
   @Column

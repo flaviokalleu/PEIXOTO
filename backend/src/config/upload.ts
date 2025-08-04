@@ -8,6 +8,10 @@ const publicFolder = path.resolve(__dirname, "..", "..", "public");
 
 export default {
   directory: publicFolder,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+    files: 5 // máximo 5 arquivos
+  },
   storage: multer.diskStorage({
     destination: async function (req, file, cb) {
 

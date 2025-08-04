@@ -18,6 +18,7 @@ interface PromptData {
     voice?: string;
     voiceKey?: string;
     voiceRegion?: string;
+    model?: string;
 }
 
 const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
@@ -43,7 +44,8 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
         ...promptData,
         voice: promptData.voice || "pt-BR",
         voiceKey: promptData.voiceKey || "",
-        voiceRegion: promptData.voiceRegion || "brazil"
+        voiceRegion: promptData.voiceRegion || "brazil",
+        model: promptData.model || "gpt-3.5-turbo-1106"
     };
 
     let promptTable = await Prompt.create(promptDataWithDefaults);

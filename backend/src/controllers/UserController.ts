@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
 import { getIO } from "../libs/socket";
 import { isEmpty, isNil } from "lodash";
-import CheckSettingsHelper from "../helpers/CheckSettings";
+import CheckSettingsHelper, { CheckSettings1 } from "../helpers/CheckSettings";
 import AppError from "../errors/AppError";
 
 import CreateUserService from "../services/UserServices/CreateUserService";
@@ -80,7 +80,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   if (
     req.url === "/signup" &&
-    (await CheckSettingsHelper("userCreation")) === "disabled"
+    (await CheckSettings1("userCreation", "enabled")) === "disabled"
   ) {
     throw new AppError("ERR_USER_CREATION_DISABLED", 403);
   } else if (req.url !== "/signup" && req.user.profile !== "admin") {
@@ -348,11 +348,28 @@ export const mediaUpload = async (
   const files = req.files as Express.Multer.File[];
   const file = head(files);
 
-  try {
-    let user = await User.findByPk(userId);
-    user.profileImage = file.filename.replace('/', '-');
+  console.log("📤 MediaUpload iniciado para userId:", userId);
+  console.log("🏢 CompanyId:", companyId);
+  console.log("📁 Arquivos recebidos:", files?.length || 0);
+  console.log("📄 Arquivo principal:", file?.filename || 'nenhum');
 
+  try {
+    if (!file) {
+      throw new AppError("Nenhum arquivo foi enviado", 400);
+    }
+
+    let user = await User.findByPk(userId);
+    
+    if (!user) {
+      throw new AppError("Usuário não encontrado", 404);
+    }
+
+    console.log("👤 Usuário encontrado:", user.name);
+    
+    user.profileImage = file.filename.replace('/', '-');
     await user.save();
+
+    console.log("✅ Imagem do perfil atualizada:", user.profileImage);
 
     user = await ShowUserService(userId, companyId);
     
@@ -363,9 +380,11 @@ export const mediaUpload = async (
         user
       });
 
+    console.log("📡 Evento socket emitido para company:", companyId);
 
     return res.status(200).json({ user, message: "Imagem atualizada" });
   } catch (err: any) {
+    console.error("❌ Erro no mediaUpload:", err.message);
     throw new AppError(err.message);
   }
 };

@@ -188,9 +188,24 @@ const handleOpenAIRequest = async (
       temperature: openAiSettings.temperature,
     });
     return chat.choices[0].message?.content || "";
-  } catch (error) {
+  } catch (error: any) {
     console.error("OpenAI request error:", error);
-    throw error;
+    
+    // Handle specific API key errors
+    if (error.status === 401 || error.message?.includes('Invalid API key')) {
+      throw new Error("Chave de API do OpenAI inválida. Verifique as configurações.");
+    }
+    
+    // Handle other specific errors
+    if (error.status === 429) {
+      throw new Error("Limite de requisições excedido. Tente novamente em alguns minutos.");
+    }
+    
+    if (error.status === 503) {
+      throw new Error("Serviço do OpenAI temporariamente indisponível. Tente novamente.");
+    }
+    
+    throw new Error("Erro ao processar solicitação com OpenAI. Tente novamente.");
   }
 };
 
@@ -219,9 +234,24 @@ const handleGeminiRequest = async (
     const chat = model.startChat({ history: geminiHistory });
     const result = await chat.sendMessage(bodyMessage);
     return result.response.text();
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini request error:", error);
-    throw error;
+    
+    // Handle specific API key errors
+    if (error.message?.includes('API key not valid') || error.status === 400) {
+      throw new Error("Chave de API do Gemini inválida. Verifique as configurações.");
+    }
+    
+    // Handle other specific errors
+    if (error.status === 429) {
+      throw new Error("Limite de requisições excedido. Tente novamente em alguns minutos.");
+    }
+    
+    if (error.status === 503) {
+      throw new Error("Serviço do Gemini temporariamente indisponível. Tente novamente.");
+    }
+    
+    throw new Error("Erro ao processar solicitação com Gemini. Tente novamente.");
   }
 };
 
@@ -307,36 +337,77 @@ const getAISession = (
   let openai: SessionOpenAi | null = null;
   let gemini: SessionGemini | null = null;
 
+  // Get API key with fallback to environment variables
+  let apiKey = openAiSettings.apiKey;
+  if (!apiKey || apiKey.trim() === '') {
+    if (isGeminiModel) {
+      apiKey = process.env.GEMINI_API_KEY || '';
+      console.log("Using fallback Gemini API key from environment");
+    } else if (isOpenAIModel) {
+      apiKey = process.env.OPENAI_API_KEY || '';
+      console.log("Using fallback OpenAI API key from environment");
+    }
+  }
+
   // Initialize OpenAI if needed
   if (isOpenAIModel) {
+    if (!apiKey || apiKey.trim() === '') {
+      console.error("OpenAI API key is missing both in database and environment variables");
+      return { openai: null, gemini: null };
+    }
+    
     const openAiIndex = sessionsOpenAi.findIndex(s => s.id === ticket.id);
     if (openAiIndex === -1) {
-      openai = new OpenAI({ apiKey: openAiSettings.apiKey }) as SessionOpenAi;
-      openai.id = ticket.id;
-      sessionsOpenAi.push(openai);
+      try {
+        openai = new OpenAI({ apiKey }) as SessionOpenAi;
+        openai.id = ticket.id;
+        sessionsOpenAi.push(openai);
+      } catch (error) {
+        console.error("Error creating OpenAI session:", error);
+        return { openai: null, gemini: null };
+      }
     } else {
       openai = sessionsOpenAi[openAiIndex];
     }
   } 
   // Initialize Gemini if needed
   else if (isGeminiModel) {
+    if (!apiKey || apiKey.trim() === '') {
+      console.error("Gemini API key is missing both in database and environment variables");
+      return { openai: null, gemini: null };
+    }
+    
     const geminiIndex = sessionsGemini.findIndex(s => s.id === ticket.id);
     if (geminiIndex === -1) {
-      gemini = new GoogleGenerativeAI(openAiSettings.apiKey) as SessionGemini;
-      gemini.id = ticket.id;
-      sessionsGemini.push(gemini);
+      try {
+        gemini = new GoogleGenerativeAI(apiKey) as SessionGemini;
+        gemini.id = ticket.id;
+        sessionsGemini.push(gemini);
+      } catch (error) {
+        console.error("Error creating Gemini session:", error);
+        return { openai: null, gemini: null };
+      }
     } else {
       gemini = sessionsGemini[geminiIndex];
     }
   }
 
   // Initialize OpenAI for transcription if needed
-  if (openAiSettings.openAiApiKey && !openai) {
+  let transcriptionApiKey = openAiSettings.openAiApiKey || apiKey;
+  if (!transcriptionApiKey || transcriptionApiKey.trim() === '') {
+    transcriptionApiKey = process.env.OPENAI_API_KEY || '';
+  }
+  
+  if (transcriptionApiKey && !openai) {
     const openAiIndex = sessionsOpenAi.findIndex(s => s.id === ticket.id);
     if (openAiIndex === -1) {
-      openai = new OpenAI({ apiKey: openAiSettings.openAiApiKey || openAiSettings.apiKey }) as SessionOpenAi;
-      openai.id = ticket.id;
-      sessionsOpenAi.push(openai);
+      try {
+        openai = new OpenAI({ apiKey: transcriptionApiKey }) as SessionOpenAi;
+        openai.id = ticket.id;
+        sessionsOpenAi.push(openai);
+      } catch (error) {
+        console.error("Error creating OpenAI transcription session:", error);
+      }
     } else {
       openai = sessionsOpenAi[openAiIndex];
     }
@@ -373,7 +444,7 @@ export const handleOpenAi = async (
 
   // Determine model type
   const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(openAiSettings.model);
-  const isGeminiModel = ["gemini-2.0-pro", "gemini-2.0-flash"].includes(openAiSettings.model);
+  const isGeminiModel = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(openAiSettings.model);
 
   if (!isOpenAIModel && !isGeminiModel) {
     console.error(`Unsupported model: ${openAiSettings.model}`);
@@ -382,6 +453,16 @@ export const handleOpenAi = async (
 
   // Get AI session
   const { openai, gemini } = getAISession(ticket, isOpenAIModel, isGeminiModel, openAiSettings);
+
+  // Check if AI session was created successfully
+  if ((isOpenAIModel && !openai) || (isGeminiModel && !gemini)) {
+    console.error("Failed to create AI session - likely due to invalid API key");
+    const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+      text: "Desculpe, há um problema de configuração com o serviço de IA. Por favor, entre em contato com o suporte.",
+    });
+    await verifyMessage(errorMessage!, ticket, contact);
+    return;
+  }
 
   // Fetch conversation history
   const messages = await Message.findAll({
@@ -393,17 +474,17 @@ export const handleOpenAi = async (
   // Create personalized prompt
   const clientName = sanitizeName(contact.name || "");
   const promptSystem = `Instruções do Sistema:
-  - Você é um assistente de atendimento ao cliente especializado,Seu nome é Ignus representando a empresa.
-  - Responda sempre com o nome do cliente: ${clientName} nas respostas para um atendimento personalizado e acolhedor.
-  - Mantenha respostas concisas com no máximo ${openAiSettings.maxTokens} tokens e termine de forma completa.
-  - Sempre mencione o nome do cliente quando possível. Se não souber o nome, pergunte gentilmente.
-  - Mantenha um tom cordial, profissional e amigável em todas as interações.
+  - Você é um assistente virtual de atendimento ao cliente especializado.
+  - Seja cordial, profissional e prestativo em todas as interações.
+  - Mantenha respostas concisas e objetivas, com no máximo ${openAiSettings.maxTokens} tokens.
+  - Use o nome do cliente quando apropriado para personalizar o atendimento: ${clientName}.
+  - Forneça informações precisas e relevantes baseadas no contexto da conversa.
   - Para transferir para atendimento humano, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
   
   Prompt Específico:
   ${openAiSettings.prompt}
   
-  Siga estas instruções cuidadosamente para garantir um atendimento de qualidade.`;
+  Siga estas instruções para garantir um atendimento de qualidade.`;
 
   // Handle text message
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
@@ -429,10 +510,22 @@ export const handleOpenAi = async (
 
       // Process and send the response
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
-    } catch (error) {
+    } catch (error: any) {
       console.error("AI request failed:", error);
+      
+      let userMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
+      
+      // Provide more specific error messages based on the error type
+      if (error.message?.includes('Chave de API')) {
+        userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
+      } else if (error.message?.includes('Limite de requisições')) {
+        userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
+      } else if (error.message?.includes('temporariamente indisponível')) {
+        userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
+      }
+      
       const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.",
+        text: userMessage,
       });
       await verifyMessage(errorMessage!, ticket, contact);
     }
@@ -487,10 +580,22 @@ export const handleOpenAi = async (
 
       // Process and send the response
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Audio processing error:", error);
+      
+      let userMessage = "Desculpe, houve um erro ao processar sua mensagem de áudio. Por favor, tente novamente ou envie uma mensagem de texto.";
+      
+      // Provide more specific error messages based on the error type
+      if (error.message?.includes('Chave de API')) {
+        userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
+      } else if (error.message?.includes('Limite de requisições')) {
+        userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
+      } else if (error.message?.includes('temporariamente indisponível')) {
+        userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
+      }
+      
       const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: "Desculpe, houve um erro ao processar sua mensagem de áudio. Por favor, tente novamente ou envie uma mensagem de texto.",
+        text: userMessage,
       });
       await verifyMessage(errorMessage!, ticket, contact);
     }

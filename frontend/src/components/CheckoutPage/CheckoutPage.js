@@ -125,8 +125,15 @@ export default function CheckoutPage(props) {
         return;
       }
 
+      if (err.response?.status === 400 && err.response?.data?.message?.includes("Token do Mercado Pago")) {
+        toast.error("Erro de configuração: " + err.response.data.message);
+        console.error("Erro de configuração do Mercado Pago:", err.response.data);
+        return;
+      }
+
       const errorMessage = err.response?.data?.message || err.message || "Erro ao processar pagamento";
       toast.error(errorMessage);
+      console.error("Erro no checkout:", err.response?.data || err.message);
     }
   }
 

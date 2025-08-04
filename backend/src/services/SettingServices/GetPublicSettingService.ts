@@ -6,6 +6,7 @@ interface Request {
 
 const publicSettingsKeys = [
   "allowSignup",
+  "userCreation",
   "primaryColorLight",
   "primaryColorDark",
   "appLogoLight",
@@ -21,9 +22,12 @@ const GetPublicSettingService = async ({
 
   console.log("|======== GetPublicSettingService ========|")
   console.log("key", key)
+  console.log("publicSettingsKeys", publicSettingsKeys)
+  console.log("key included?", publicSettingsKeys.includes(key))
   console.log("|=========================================|")
 
   if (!publicSettingsKeys.includes(key)) {
+    console.log("Key not in public settings, returning null")
     return null;
   }
   
@@ -33,6 +37,9 @@ const GetPublicSettingService = async ({
       key
     }
   });
+
+  console.log("Found setting:", setting ? setting.toJSON() : "null");
+  console.log("Setting value:", setting?.value);
 
   return setting?.value;
 };

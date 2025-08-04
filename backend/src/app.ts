@@ -45,7 +45,30 @@ app.set("queues", {
   sendScheduledMessages
 });
 
-const allowedOrigins = [process.env.FRONTEND_URL];
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'https://localhost:3000',
+  'http://localhost:8081',
+  'https://localhost:8081',
+  'https://backend.metatechbot.site',
+  'http://backend.metatechbot.site',
+  '*'
+];
+
+console.log("🌐 Origens permitidas (CORS):", allowedOrigins);
+
+// Middleware de debug para CORS
+app.use((req, res, next) => {
+  console.log(`🌍 Requisição recebida: ${req.method} ${req.path}`);
+  console.log(`📍 Origin: ${req.headers.origin || 'undefined'}`);
+  console.log(`🔗 Referer: ${req.headers.referer || 'undefined'}`);
+  console.log(`🏠 Host: ${req.headers.host || 'undefined'}`);
+  console.log(`🔒 Protocol: ${req.protocol}`);
+  console.log(`🔐 Secure: ${req.secure}`);
+  console.log(`📡 X-Forwarded-Proto: ${req.headers['x-forwarded-proto'] || 'undefined'}`);
+  next();
+});
 
 // Configuração do BullBoard
 if (String(process.env.BULL_BOARD).toLocaleLowerCase() === 'true' && process.env.REDIS_URI_ACK !== '') {
@@ -78,16 +101,59 @@ app.use(bodyParser.urlencoded({ limit: '5mb', extended: true }));
 app.use(
   cors({
     credentials: true,
-    origin: allowedOrigins
+    origin: function (origin, callback) {
+      // Permitir requisições sem origin (aplicativos móveis, Postman, etc.)
+      if (!origin) return callback(null, true);
+      
+      // Verificar se a origin está na lista de permitidas
+      if (allowedOrigins.includes(origin) || allowedOrigins.includes('*')) {
+        return callback(null, true);
+      }
+      
+      // Permitir origins localhost com qualquer porta
+      if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+        return callback(null, true);
+      }
+      
+      // Se não está permitida, bloquear
+      const msg = 'The CORS policy for this site does not allow access from the specified origin.';
+      return callback(new Error(msg), false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization'],
+    exposedHeaders: ['Content-Length', 'X-Foo', 'X-Bar'],
+    preflightContinue: false,
+    optionsSuccessStatus: 200
   })
 );
 app.use(cookieParser());
 app.use(express.json());
+
+// Middleware adicional para tratar OPTIONS
+app.options('*', (req, res) => {
+  console.log(`✅ Preflight OPTIONS para: ${req.path}`);
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS,PATCH');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
+
 app.use(Sentry.Handlers.requestHandler());
 app.use("/public", express.static(uploadConfig.directory));
 
 // Rotas
 app.use(routes);
+
+// Endpoint de teste para CORS
+app.get('/test-cors', (req, res) => {
+  res.json({
+    message: 'CORS funcionando!',
+    origin: req.headers.origin,
+    method: req.method,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Manipulador de erros do Sentry
 app.use(Sentry.Handlers.errorHandler());

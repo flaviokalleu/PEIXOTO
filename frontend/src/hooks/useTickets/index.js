@@ -47,7 +47,7 @@ const useTickets = ({
                 whatsapps: whatsappIds,
                 statusFilter,
                 sortTickets,
-                searchOnMessages
+                searchOnMessages: searchParam ? "true" : searchOnMessages // Sempre ativar busca em mensagens quando há termo de pesquisa
               },
             });
             
