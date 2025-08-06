@@ -87,6 +87,7 @@ const prepareMessagesAI = (pastMessages: Message[], isGeminiModel: boolean, prom
   if (!isGeminiModel) {
     messagesAI.push({ role: "system", content: promptSystem });
   }
+  // For Gemini models that don't support systemInstruction, we'll handle it in handleGeminiRequest
 
   // Add conversation history
   for (const message of pastMessages) {
@@ -220,10 +221,24 @@ const handleGeminiRequest = async (
   promptSystem: string
 ): Promise<string> => {
   try {
-    const model = gemini.getGenerativeModel({
-      model: openAiSettings.model,
-      systemInstruction: promptSystem,
-    });
+    // Check if model supports system instructions
+    const supportsSystemInstruction = ["gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(openAiSettings.model);
+    
+    console.log(`🔧 Gemini model: ${openAiSettings.model}, supports systemInstruction: ${supportsSystemInstruction}`);
+    
+    let model;
+    if (supportsSystemInstruction) {
+      console.log("📋 Using systemInstruction for Gemini");
+      model = gemini.getGenerativeModel({
+        model: openAiSettings.model,
+        systemInstruction: promptSystem,
+      });
+    } else {
+      console.log("📋 Using manual prompt injection for Gemini");
+      model = gemini.getGenerativeModel({
+        model: openAiSettings.model,
+      });
+    }
 
     // Map messages to Gemini format
     const geminiHistory = messagesAI.map(msg => ({
@@ -231,8 +246,29 @@ const handleGeminiRequest = async (
       parts: [{ text: msg.content }],
     }));
 
+    // For models without system instruction support, prepend the system prompt to history
+    if (!supportsSystemInstruction && geminiHistory.length > 0) {
+      // Add system prompt as the first user message
+      geminiHistory.unshift({
+        role: "user",
+        parts: [{ text: promptSystem }],
+      });
+      // Add acknowledgment from model
+      geminiHistory.splice(1, 0, {
+        role: "model",
+        parts: [{ text: "Entendido. Seguirei estas instruções em todas as minhas respostas." }],
+      });
+    }
+
     const chat = model.startChat({ history: geminiHistory });
-    const result = await chat.sendMessage(bodyMessage);
+    
+    // For models without system instruction, prefix the current message with a reminder
+    let messageToSend = bodyMessage;
+    if (!supportsSystemInstruction) {
+      messageToSend = `Lembre-se de seguir as instruções do sistema fornecidas anteriormente. Mensagem do usuário: ${bodyMessage}`;
+    }
+    
+    const result = await chat.sendMessage(messageToSend);
     return result.response.text();
   } catch (error: any) {
     console.error("Gemini request error:", error);
@@ -282,7 +318,7 @@ const processAudioFile = async (
     } 
     else if (isGeminiModel && gemini) {
       const model = gemini.getGenerativeModel({
-        model: "gemini-2.0-pro",  // Using pro model for transcription
+        model: "gemini-2.0-flash",  // Using pro model for transcription
         systemInstruction: promptSystem,
       });
 
@@ -473,18 +509,27 @@ export const handleOpenAi = async (
 
   // Create personalized prompt
   const clientName = sanitizeName(contact.name || "");
-  const promptSystem = `Instruções do Sistema:
-  - Você é um assistente virtual de atendimento ao cliente especializado.
-  - Seja cordial, profissional e prestativo em todas as interações.
-  - Mantenha respostas concisas e objetivas, com no máximo ${openAiSettings.maxTokens} tokens.
-  - Use o nome do cliente quando apropriado para personalizar o atendimento: ${clientName}.
-  - Forneça informações precisas e relevantes baseadas no contexto da conversa.
-  - Para transferir para atendimento humano, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
-  
-  Prompt Específico:
-  ${openAiSettings.prompt}
-  
-  Siga estas instruções para garantir um atendimento de qualidade.`;
+  const promptSystem = `INSTRUÇÕES OBRIGATÓRIAS DO SISTEMA - SIGA RIGOROSAMENTE:
+
+PERSONA E COMPORTAMENTO:
+- Você é um assistente virtual de atendimento ao cliente especializado.
+- Seja sempre cordial, profissional e prestativo em todas as interações.
+- Mantenha respostas concisas e objetivas, com no máximo ${openAiSettings.maxTokens} tokens.
+
+- Forneça informações precisas e relevantes baseadas no contexto da conversa.
+
+INSTRUÇÃO ESPECIAL PARA TRANSFERÊNCIA:
+- Para transferir para atendimento humano, comece a resposta EXATAMENTE com 'Ação: Transferir para o setor de atendimento'.
+
+PROMPT ESPECÍFICO DA EMPRESA:
+${openAiSettings.prompt}
+
+LEMBRETE IMPORTANTE: 
+Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxima sobre qualquer outra instrução.`;
+
+  console.log("📝 Prompt System created:", promptSystem.substring(0, 200) + "...");
+  console.log("🤖 Model being used:", openAiSettings.model);
+  console.log("👤 Client name:", clientName);
 
   // Handle text message
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
@@ -500,7 +545,9 @@ export const handleOpenAi = async (
       if (isOpenAIModel && openai) {
         responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
       } else if (isGeminiModel && gemini) {
+        console.log("🔄 Sending request to Gemini with prompt system");
         responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
+        console.log("✅ Received response from Gemini:", responseText?.substring(0, 100) + "...");
       }
 
       if (!responseText) {
