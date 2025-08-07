@@ -24,8 +24,21 @@ const queueOptions = {
 };
 
 const queues = Object.values(jobs).reduce((acc, job) => {
+  const redisConfig = REDIS_URI_MSG_CONN ? {
+    redis: REDIS_URI_MSG_CONN,
+    settings: {
+      retryDelayOnFailover: 100,
+      enableReadyCheck: false,
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+      connectTimeout: 60000,
+      commandTimeout: 5000,
+      readOnly: false
+    }
+  } : undefined;
+  
   acc.push({
-    bull: new BullQueue(job.key, REDIS_URI_MSG_CONN, queueOptions),
+    bull: new BullQueue(job.key, redisConfig, queueOptions),
     name: job.key,
     handle: job.handle,
   });

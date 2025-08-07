@@ -1,5 +1,23 @@
 import React, { useContext, useEffect, useReducer, useState } from "react";
-import { Button, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, styled } from "@material-ui/core";
+import { 
+  Button, 
+  IconButton, 
+  Paper, 
+  Table, 
+  TableBody, 
+  TableCell, 
+  TableContainer, 
+  TableHead, 
+  TableRow, 
+  Typography, 
+  Box,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip,
+  Grid
+} from "@material-ui/core";
+import { ExpandMore, Info, Help } from "@material-ui/icons";
 import { makeStyles } from "@material-ui/core/styles";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -29,6 +47,15 @@ const useStyles = makeStyles((theme) => ({
     [theme.breakpoints.down('sm')]: {
       margin: theme.spacing(1),
       padding: theme.spacing(1),
+    },
+  },
+  helpPaper: {
+    padding: theme.spacing(2),
+    margin: theme.spacing(1, 2, 2, 2),
+    backgroundColor: theme.palette.background.paper,
+    borderRadius: theme.shape.borderRadius,
+    [theme.breakpoints.down('sm')]: {
+      margin: theme.spacing(1, 1, 2, 1),
     },
   },
   tableContainer: {
@@ -66,6 +93,23 @@ const useStyles = makeStyles((theme) => ({
     '&:hover': {
       backgroundColor: theme.palette.action.selected,
     },
+  },
+  exampleCode: {
+    backgroundColor: theme.palette.grey[100],
+    padding: theme.spacing(1),
+    borderRadius: theme.shape.borderRadius,
+    fontFamily: 'monospace',
+    fontSize: '0.875rem',
+    margin: theme.spacing(1, 0),
+    border: `1px solid ${theme.palette.divider}`,
+  },
+  mediaTypeChip: {
+    margin: theme.spacing(0.5),
+    fontWeight: 'bold',
+  },
+  helpIcon: {
+    marginLeft: theme.spacing(1),
+    color: theme.palette.primary.main,
   },
 }));
 
@@ -220,7 +264,10 @@ const Prompts = () => {
       ) : (
         <>
           <MainHeader>
-            <Title>{i18n.t("prompts.title")}</Title>
+            <Title>
+              {i18n.t("prompts.title")}
+              <Help className={classes.helpIcon} />
+            </Title>
             <MainHeaderButtonsWrapper>
               <Button
                 variant="contained"
@@ -237,6 +284,107 @@ const Prompts = () => {
               </Button>
             </MainHeaderButtonsWrapper>
           </MainHeader>
+          
+          {/* Help Section */}
+          <Paper className={classes.helpPaper} variant="outlined">
+            <Box display="flex" alignItems="center" mb={2}>
+              <Info color="primary" />
+              <Typography variant="h6" style={{ marginLeft: 8 }}>
+                Como usar Mídia nos Prompts
+              </Typography>
+            </Box>
+            
+            <Typography variant="body2" color="textSecondary" paragraph>
+              Para enviar mídia através dos prompts, use os seguintes formatos obrigatórios:
+            </Typography>
+
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <Chip 
+                  label="📷 IMAGENS" 
+                  color="primary" 
+                  variant="outlined" 
+                  className={classes.mediaTypeChip}
+                />
+                <div className={classes.exampleCode}>
+                  imagem:"https://exemplo.com/foto.jpg"
+                </div>
+              </Grid>
+              
+              <Grid item xs={12} md={4}>
+                <Chip 
+                  label="🎥 VÍDEOS" 
+                  color="secondary" 
+                  variant="outlined" 
+                  className={classes.mediaTypeChip}
+                />
+                <div className={classes.exampleCode}>
+                  video:"https://exemplo.com/video.mp4"
+                </div>
+              </Grid>
+              
+              <Grid item xs={12} md={4}>
+                <Chip 
+                  label="📄 DOCUMENTOS" 
+                  color="default" 
+                  variant="outlined" 
+                  className={classes.mediaTypeChip}
+                />
+                <div className={classes.exampleCode}>
+                  documento:"https://exemplo.com/arquivo.pdf"
+                </div>
+              </Grid>
+            </Grid>
+
+            <Accordion style={{ marginTop: 16 }}>
+              <AccordionSummary expandIcon={<ExpandMore />}>
+                <Typography variant="subtitle1" color="primary">
+                  📝 Exemplo Completo de Prompt
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <Box>
+                  <Typography variant="body2" paragraph>
+                    <strong>Exemplo de prompt para uma loja de móveis:</strong>
+                  </Typography>
+                  <div className={classes.exampleCode}>
+                    {`Assistente virtual:
+Olá! Sou o assistente da MóveisTop 🪑
+
+Seja bem-vindo! Temos várias opções disponíveis:
+
+📦 Ver nosso catálogo completo:
+imagem:"https://i.postimg.cc/QxNh9rtZ/catalogo-moveis.jpg"
+
+🎥 Assista ao vídeo demonstrativo dos produtos:
+video:"https://exemplo.com/demonstracao-moveis.mp4"
+
+📄 Baixe nossa tabela de preços:
+documento:"https://exemplo.com/tabela-precos.pdf"
+
+Como posso ajudar você hoje? 😊`}
+                  </div>
+                  
+                  <Typography variant="body2" color="textSecondary" style={{ marginTop: 16 }}>
+                    <strong>Resultado:</strong> O cliente receberá a mensagem de texto junto com a imagem, vídeo e documento anexados automaticamente.
+                  </Typography>
+                </Box>
+              </AccordionDetails>
+            </Accordion>
+
+            <Box mt={2}>
+              <Typography variant="body2" color="textSecondary">
+                <strong>Dicas importantes:</strong>
+              </Typography>
+              <Typography variant="body2" color="textSecondary" component="div">
+                • Use aspas duplas para os links<br/>
+                • Os arquivos serão baixados e enviados automaticamente<br/>
+                • O texto do prompt será usado como legenda da mídia<br/>
+                • Você pode combinar múltiplos tipos de mídia no mesmo prompt
+              </Typography>
+            </Box>
+          </Paper>
+
           <Paper className={classes.mainPaper} variant="outlined" elevation={2}>
             <TableContainer className={classes.tableContainer}>
               <Table size="medium" className={classes.table} stickyHeader>

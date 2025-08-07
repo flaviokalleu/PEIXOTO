@@ -581,7 +581,6 @@ export const getStatusReplyInfo = async (msg: proto.IWebMessageInfo, companyId: 
     Object.keys(msg?.message).values().next().value
   ];
   
-  console.log("🔍 EXTRACTED BODY:", JSON.stringify(body, null, 2));
   
   // Verifica se é uma resposta a um status
   if (body?.contextInfo?.quotedMessage) {
@@ -1238,8 +1237,7 @@ export const verifyMediaMessage = async (
       statusId: statusReplyInfo?.statusId || null
     };
 
-    console.log("💾 SAVING MEDIA MESSAGE DATA:", JSON.stringify(messageData, null, 2));
-
+    
     await ticket.update({
       lastMessage: body || media.filename
     });
@@ -3958,6 +3956,7 @@ const handleMessage = async (
       !isNil(whatsapp.promptId)
     ) {
       const { prompt } = whatsapp;
+      console.log(`🔍 OpenAI na conexão - Ticket ID: ${ticket.id}, Prompt ID: ${whatsapp.promptId}, Queue ID: ${ticket.queueId}`);
       // Garante que o campo model está presente no prompt, usando "gpt-3.5-turbo" como padrão
       const openAiSettings = {
         ...prompt,
@@ -4093,17 +4092,7 @@ const handleMessage = async (
       }
     }
 
-    console.log("[DEBUG] Estado do ticket antes de verifyQueue:", {
-      imported: ticket.imported,
-      queue: ticket.queue,
-      isGroup: ticket.isGroup,
-      groupAsTicket: whatsapp.groupAsTicket,
-      fromMe: msg.key.fromMe,
-      userId: ticket.userId,
-      queuesLength: whatsapp.queues.length,
-      useIntegration: ticket.useIntegration,
-      queueId: ticket.queueId
-    });
+   
 
     if (
       !ticket.imported &&

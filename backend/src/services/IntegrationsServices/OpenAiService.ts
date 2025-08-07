@@ -10,12 +10,14 @@ import {
 import { isNil } from "lodash";
 import fs from "fs";
 import path from "path";
+import axios from "axios";
 import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import TicketTraking from "../../models/TicketTraking";
+import Prompt from "../../models/Prompt";
 
 type Session = WASocket & {
   id?: number;
@@ -64,6 +66,187 @@ const deleteFileSync = (filePath: string): void => {
   } catch (error) {
     console.error(`Error deleting file ${filePath}:`, error);
   }
+};
+
+/**
+ * Downloads a file from URL and saves it locally
+ */
+const downloadFile = async (url: string, savePath: string): Promise<string | null> => {
+  try {
+    const response = await axios({
+      method: 'GET',
+      url: url,
+      responseType: 'stream',
+    });
+
+    const writer = fs.createWriteStream(savePath);
+    response.data.pipe(writer);
+
+    return new Promise((resolve, reject) => {
+      writer.on('finish', () => resolve(savePath));
+      writer.on('error', reject);
+    });
+  } catch (error) {
+    console.error(`Error downloading file from ${url}:`, error);
+    return null;
+  }
+};
+
+/**
+ * Checks if response contains image URLs and handles them
+ */
+const handleImageUrls = async (
+  responseText: string,
+  wbot: Session,
+  msg: proto.IWebMessageInfo,
+  ticket: Ticket,
+  contact: Contact,
+  publicFolder: string
+): Promise<string> => {
+  const imagePattern = /imagem:\s*"([^"]+)"/gi;
+  const videoPattern = /video:\s*"([^"]+)"/gi;
+  const documentPattern = /documento:\s*"([^"]+)"/gi;
+  
+  let hasMedia = false;
+  let cleanedResponse = responseText;
+
+  // Handle images
+  const imageMatches = [...responseText.matchAll(imagePattern)];
+  if (imageMatches.length > 0) {
+    hasMedia = true;
+    
+    // Extract text around image patterns to use as caption
+    let textBeforeImage = "";
+    let textAfterImage = "";
+    
+    const firstMatch = imageMatches[0];
+    const firstImageIndex = firstMatch.index || 0;
+    if (firstImageIndex > 0) {
+      textBeforeImage = responseText.substring(0, firstImageIndex).trim();
+    }
+    
+    const lastMatch = imageMatches[imageMatches.length - 1];
+    const lastImageIndex = (lastMatch.index || 0) + lastMatch[0].length;
+    if (lastImageIndex < responseText.length) {
+      textAfterImage = responseText.substring(lastImageIndex).trim();
+    }
+    
+    // Create caption from surrounding text
+    let caption = "";
+    if (textBeforeImage) {
+      caption = textBeforeImage;
+    }
+    if (textAfterImage) {
+      caption = caption ? `${caption}\n\n${textAfterImage}` : textAfterImage;
+    }
+    
+    // Fallback to default if no surrounding text
+    if (!caption) {
+      caption = "📷";
+    }
+    
+    for (const match of imageMatches) {
+      const imageUrl = match[1];
+      try {
+        const fileName = `image_${Date.now()}_${Math.random().toString(36).substring(2, 15)}.jpg`;
+        const imagePath = path.join(publicFolder, fileName);
+        
+        const downloadedPath = await downloadFile(imageUrl, imagePath);
+        
+        if (downloadedPath && fs.existsSync(downloadedPath)) {
+          // Send the image with AI response as caption
+          const sentImageMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            image: { url: downloadedPath },
+            caption: caption
+          });
+          
+          await verifyMediaMessage(sentImageMessage!, ticket, contact, null as any, false, false, wbot);
+          
+          // Clean up the downloaded image after sending
+          setTimeout(() => deleteFileSync(downloadedPath), 5000);
+        }
+      } catch (error) {
+        console.error(`Error processing image URL ${imageUrl}:`, error);
+      }
+    }
+    
+    // Remove image patterns from response
+    cleanedResponse = cleanedResponse.replace(imagePattern, '').trim();
+  }
+
+  // Handle videos
+  const videoMatches = [...responseText.matchAll(videoPattern)];
+  if (videoMatches.length > 0) {
+    hasMedia = true;
+    
+    for (const match of videoMatches) {
+      const videoUrl = match[1];
+      try {
+        const fileName = `video_${Date.now()}_${Math.random().toString(36).substring(2, 15)}.mp4`;
+        const videoPath = path.join(publicFolder, fileName);
+        
+        const downloadedPath = await downloadFile(videoUrl, videoPath);
+        
+        if (downloadedPath && fs.existsSync(downloadedPath)) {
+          // Send the video
+          const sentVideoMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            video: { url: downloadedPath },
+            caption: "🎥"
+          });
+          
+          await verifyMediaMessage(sentVideoMessage!, ticket, contact, null as any, false, false, wbot);
+          
+          // Clean up the downloaded video after sending
+          setTimeout(() => deleteFileSync(downloadedPath), 5000);
+        }
+      } catch (error) {
+        console.error(`Error processing video URL ${videoUrl}:`, error);
+      }
+    }
+    
+    // Remove video patterns from response
+    cleanedResponse = cleanedResponse.replace(videoPattern, '').trim();
+  }
+
+  // Handle documents
+  const documentMatches = [...responseText.matchAll(documentPattern)];
+  if (documentMatches.length > 0) {
+    hasMedia = true;
+    
+    for (const match of documentMatches) {
+      const documentUrl = match[1];
+      try {
+        const fileName = `document_${Date.now()}_${Math.random().toString(36).substring(2, 15)}.pdf`;
+        const documentPath = path.join(publicFolder, fileName);
+        
+        const downloadedPath = await downloadFile(documentUrl, documentPath);
+        
+        if (downloadedPath && fs.existsSync(downloadedPath)) {
+          // Send the document
+          const sentDocumentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            document: { url: downloadedPath },
+            mimetype: "application/pdf",
+            fileName: fileName,
+            caption: "📄"
+          });
+          
+          await verifyMediaMessage(sentDocumentMessage!, ticket, contact, null as any, false, false, wbot);
+          
+          // Clean up the downloaded document after sending
+          setTimeout(() => deleteFileSync(downloadedPath), 5000);
+        }
+      } catch (error) {
+        console.error(`Error processing document URL ${documentUrl}:`, error);
+      }
+    }
+    
+    // Remove document patterns from response
+    cleanedResponse = cleanedResponse.replace(documentPattern, '').trim();
+  }
+
+  // If media was found and sent, return empty string to avoid duplicate text
+  // Otherwise return the original response
+  return hasMedia ? "" : responseText;
 };
 
 /**
@@ -129,12 +312,17 @@ const processResponse = async (
 
   const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
 
+  // Handle image URLs in the response before sending text
+  response = await handleImageUrls(response, wbot, msg, ticket, contact, publicFolder);
+
   // Send response based on preferred format (text or voice)
   if (openAiSettings.voice === "texto") {
-    const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-      text: `\u200e ${response}`,
-    });
-    await verifyMessage(sentMessage!, ticket, contact);
+    if (response && response.trim() !== '') {
+      const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+        text: `\u200e ${response}`,
+      });
+      await verifyMessage(sentMessage!, ticket, contact);
+    }
   } else {
     const fileNameWithOutExtension = `${ticket.id}_${Date.now()}`;
     try {
@@ -165,10 +353,12 @@ const processResponse = async (
     } catch (error) {
       console.error(`Error responding with audio: ${error}`);
       // Fallback to text response
-      const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: `\u200e ${response}`,
-      });
-      await verifyMessage(sentMessage!, ticket, contact);
+      if (response && response.trim() !== '') {
+        const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+          text: `\u200e ${response}`,
+        });
+        await verifyMessage(sentMessage!, ticket, contact);
+      }
     }
   }
 };
@@ -364,31 +554,107 @@ const processAudioFile = async (
 /**
  * Create or retrieve AI session for ticket
  */
-const getAISession = (
+const getAISession = async (
   ticket: Ticket, 
   isOpenAIModel: boolean, 
   isGeminiModel: boolean, 
   openAiSettings: IOpenAi
-): { openai: SessionOpenAi | null, gemini: SessionGemini | null } => {
+): Promise<{ openai: SessionOpenAi | null, gemini: SessionGemini | null }> => {
   let openai: SessionOpenAi | null = null;
   let gemini: SessionGemini | null = null;
 
-  // Get API key with fallback to environment variables
-  let apiKey = openAiSettings.apiKey;
-  if (!apiKey || apiKey.trim() === '') {
-    if (isGeminiModel) {
-      apiKey = process.env.GEMINI_API_KEY || '';
-      console.log("Using fallback Gemini API key from environment");
-    } else if (isOpenAIModel) {
-      apiKey = process.env.OPENAI_API_KEY || '';
-      console.log("Using fallback OpenAI API key from environment");
+  // Get API key from database first, then fallback to environment variables
+  let apiKey = '';
+  
+  // Try to find prompt by queueId to get API key from database
+  if (ticket.queueId) {
+    try {
+      const promptFromDB = await Prompt.findOne({
+        where: {
+          queueId: ticket.queueId,
+          companyId: ticket.companyId
+        }
+      });
+      
+      if (promptFromDB && promptFromDB.apiKey) {
+        apiKey = promptFromDB.apiKey;
+        console.log(`📋 Using API key from database prompt (Queue ID: ${ticket.queueId})`);
+      } else {
+        console.log(`❌ No prompt found for queueId: ${ticket.queueId}, companyId: ${ticket.companyId}`);
+      }
+    } catch (error) {
+      console.error("Error fetching prompt from database:", error);
+    }
+  } else {
+    // Se não tem queueId, busca pelo promptId do whatsapp
+    console.log(`❌ No queueId found in ticket: ${ticket.id}, trying to get from whatsapp promptId`);
+    
+    // Primeiro tenta usar o queueId do openAiSettings se disponível
+    if (openAiSettings.queueId) {
+      try {
+        const promptFromDB = await Prompt.findOne({
+          where: {
+            queueId: openAiSettings.queueId,
+            companyId: ticket.companyId
+          }
+        });
+        
+        if (promptFromDB && promptFromDB.apiKey) {
+          apiKey = promptFromDB.apiKey;
+          console.log(`📋 Using API key from database prompt via openAiSettings (Queue ID: ${openAiSettings.queueId})`);
+        } else {
+          console.log(`❌ No prompt found for openAiSettings.queueId: ${openAiSettings.queueId}, companyId: ${ticket.companyId}`);
+        }
+      } catch (error) {
+        console.error("Error fetching prompt from database via openAiSettings:", error);
+      }
+    }
+    
+    // Se ainda não tem API key, busca diretamente pelo ID do prompt se disponível no openAiSettings
+    if ((!apiKey || apiKey.trim() === '') && (openAiSettings as any).id) {
+      try {
+        const promptFromDB = await Prompt.findOne({
+          where: {
+            id: (openAiSettings as any).id,
+            companyId: ticket.companyId
+          }
+        });
+        
+        if (promptFromDB && promptFromDB.apiKey) {
+          apiKey = promptFromDB.apiKey;
+          console.log(`📋 Using API key from database prompt via direct ID: ${(openAiSettings as any).id}`);
+        } else {
+          console.log(`❌ No prompt found for direct ID: ${(openAiSettings as any).id}, companyId: ${ticket.companyId}`);
+        }
+      } catch (error) {
+        console.error("Error fetching prompt from database via direct ID:", error);
+      }
     }
   }
+
+  // Fallback to openAiSettings.apiKey if no database key found
+  if (!apiKey || apiKey.trim() === '') {
+    apiKey = openAiSettings.apiKey;
+    if (apiKey && apiKey.trim() !== '') {
+      console.log("📋 Using API key from openAiSettings");
+    }
+  }
+
+  // Final fallback to environment variables - REMOVIDO
+  // if (!apiKey || apiKey.trim() === '') {
+  //   if (isGeminiModel) {
+  //     apiKey = process.env.GEMINI_API_KEY || '';
+  //     console.log("📋 Using fallback Gemini API key from environment");
+  //   } else if (isOpenAIModel) {
+  //     apiKey = process.env.OPENAI_API_KEY || '';
+  //     console.log("📋 Using fallback OpenAI API key from environment");
+  //   }
+  // }
 
   // Initialize OpenAI if needed
   if (isOpenAIModel) {
     if (!apiKey || apiKey.trim() === '') {
-      console.error("OpenAI API key is missing both in database and environment variables");
+      console.error(`❌ OpenAI API key is missing - Database: ${ticket.queueId ? 'searched' : 'no queueId'}, OpenAiSettings.queueId: ${openAiSettings.queueId ? 'searched' : 'missing'}, Settings: ${openAiSettings.apiKey ? 'present' : 'missing'}`);
       return { openai: null, gemini: null };
     }
     
@@ -409,7 +675,7 @@ const getAISession = (
   // Initialize Gemini if needed
   else if (isGeminiModel) {
     if (!apiKey || apiKey.trim() === '') {
-      console.error("Gemini API key is missing both in database and environment variables");
+      console.error(`❌ Gemini API key is missing - Database: ${ticket.queueId ? 'searched' : 'no queueId'}, OpenAiSettings.queueId: ${openAiSettings.queueId ? 'searched' : 'missing'}, Settings: ${openAiSettings.apiKey ? 'present' : 'missing'}`);
       return { openai: null, gemini: null };
     }
     
@@ -464,6 +730,21 @@ export const handleOpenAi = async (
   mediaSent: Message | undefined,
   ticketTraking: TicketTraking
 ): Promise<void> => {
+  console.log(`🚀 handleOpenAi started - Ticket ID: ${ticket.id}, Queue ID: ${ticket.queueId}, Company ID: ${ticket.companyId}`);
+  
+  // Se openAiSettings é um modelo Sequelize, converte para objeto simples
+  let settings: IOpenAi;
+  if (openAiSettings && typeof openAiSettings === 'object' && 'dataValues' in openAiSettings) {
+    settings = (openAiSettings as any).dataValues || (openAiSettings as any).toJSON();
+    console.log(`🔧 OpenAiSettings converted from Sequelize model`);
+  } else {
+    settings = openAiSettings;
+  }
+  
+  console.log(`🔧 Settings apiKey:`, settings.apiKey ? '***present***' : 'missing');
+  console.log(`🔧 Settings queueId:`, settings.queueId);
+  console.log(`🔧 Settings model:`, settings.model);
+  
   // Skip processing if bot is disabled for this contact
   if (contact.disableBot) {
     return;
@@ -474,21 +755,21 @@ export const handleOpenAi = async (
   if (!bodyMessage && !msg.message?.audioMessage) return;
 
   // Skip if no settings or is a message stub
-  if (!openAiSettings || msg.messageStubType) return;
+  if (!settings || msg.messageStubType) return;
 
   const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
 
   // Determine model type
-  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(openAiSettings.model);
-  const isGeminiModel = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(openAiSettings.model);
+  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(settings.model);
+  const isGeminiModel = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(settings.model);
 
   if (!isOpenAIModel && !isGeminiModel) {
-    console.error(`Unsupported model: ${openAiSettings.model}`);
+    console.error(`Unsupported model: ${settings.model}`);
     return;
   }
 
   // Get AI session
-  const { openai, gemini } = getAISession(ticket, isOpenAIModel, isGeminiModel, openAiSettings);
+  const { openai, gemini } = await getAISession(ticket, isOpenAIModel, isGeminiModel, settings);
 
   // Check if AI session was created successfully
   if ((isOpenAIModel && !openai) || (isGeminiModel && !gemini)) {
@@ -504,7 +785,7 @@ export const handleOpenAi = async (
   const messages = await Message.findAll({
     where: { ticketId: ticket.id },
     order: [["createdAt", "ASC"]],
-    limit: openAiSettings.maxMessages,
+    limit: settings.maxMessages,
   });
 
   // Create personalized prompt
@@ -514,7 +795,7 @@ export const handleOpenAi = async (
 PERSONA E COMPORTAMENTO:
 - Você é um assistente virtual de atendimento ao cliente especializado.
 - Seja sempre cordial, profissional e prestativo em todas as interações.
-- Mantenha respostas concisas e objetivas, com no máximo ${openAiSettings.maxTokens} tokens.
+- Mantenha respostas concisas e objetivas, com no máximo ${settings.maxTokens} tokens.
 
 - Forneça informações precisas e relevantes baseadas no contexto da conversa.
 
@@ -522,13 +803,13 @@ INSTRUÇÃO ESPECIAL PARA TRANSFERÊNCIA:
 - Para transferir para atendimento humano, comece a resposta EXATAMENTE com 'Ação: Transferir para o setor de atendimento'.
 
 PROMPT ESPECÍFICO DA EMPRESA:
-${openAiSettings.prompt}
+${settings.prompt}
 
 LEMBRETE IMPORTANTE: 
 Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxima sobre qualquer outra instrução.`;
 
   console.log("📝 Prompt System created:", promptSystem.substring(0, 200) + "...");
-  console.log("🤖 Model being used:", openAiSettings.model);
+  console.log("🤖 Model being used:", settings.model);
   console.log("👤 Client name:", clientName);
 
   // Handle text message
@@ -543,10 +824,10 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
 
       // Get response from appropriate AI model
       if (isOpenAIModel && openai) {
-        responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
+        responseText = await handleOpenAIRequest(openai, messagesAI, settings);
       } else if (isGeminiModel && gemini) {
         console.log("🔄 Sending request to Gemini with prompt system");
-        responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, bodyMessage!, promptSystem);
+        responseText = await handleGeminiRequest(gemini, messagesAI, settings, bodyMessage!, promptSystem);
         console.log("✅ Received response from Gemini:", responseText?.substring(0, 100) + "...");
       }
 
@@ -556,7 +837,7 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
       }
 
       // Process and send the response
-      await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+      await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
     } catch (error: any) {
       console.error("AI request failed:", error);
       
@@ -615,9 +896,9 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
 
       // Get response from appropriate AI model
       if (isOpenAIModel && openai) {
-        responseText = await handleOpenAIRequest(openai, messagesAI, openAiSettings);
+        responseText = await handleOpenAIRequest(openai, messagesAI, settings);
       } else if (isGeminiModel && gemini) {
-        responseText = await handleGeminiRequest(gemini, messagesAI, openAiSettings, transcription, promptSystem);
+        responseText = await handleGeminiRequest(gemini, messagesAI, settings, transcription, promptSystem);
       }
 
       if (!responseText) {
@@ -626,7 +907,7 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
       }
 
       // Process and send the response
-      await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+      await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
     } catch (error: any) {
       console.error("Audio processing error:", error);
       
