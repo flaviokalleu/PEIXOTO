@@ -39,20 +39,12 @@ class CacheSingleton {
     option?: string,
     optionValue?: string | number
   ): Promise<string> {
-    try {
-      const setPromisefy = util.promisify(this.redis.set).bind(this.redis);
-      if (option !== undefined && optionValue !== undefined) {
-        return setPromisefy(key, value, option, optionValue);
-      }
-
-      return setPromisefy(key, value);
-    } catch (error: any) {
-      if (error.message?.includes('READONLY') || error.message?.includes('read only replica')) {
-        console.warn(`Redis is in read-only mode. Skipping set operation for key: ${key}`);
-        return 'OK';
-      }
-      throw error;
+    const setPromisefy = util.promisify(this.redis.set).bind(this.redis);
+    if (option !== undefined && optionValue !== undefined) {
+      return setPromisefy(key, value, option, optionValue);
     }
+
+    return setPromisefy(key, value);
   }
 
   public async get(key: string): Promise<string | null> {
@@ -66,29 +58,13 @@ class CacheSingleton {
   }
 
   public async del(key: string): Promise<number> {
-    try {
-      const delPromisefy = util.promisify(this.redis.del).bind(this.redis);
-      return delPromisefy(key);
-    } catch (error: any) {
-      if (error.message?.includes('READONLY') || error.message?.includes('read only replica')) {
-        console.warn(`Redis is in read-only mode. Skipping del operation for key: ${key}`);
-        return 0;
-      }
-      throw error;
-    }
+    const delPromisefy = util.promisify(this.redis.del).bind(this.redis);
+    return delPromisefy(key);
   }
 
   public async delFromPattern(pattern: string): Promise<void> {
-    try {
-      const all = await this.getKeys(pattern);
-      await Promise.all(all.map(item => this.del(item)));
-    } catch (error: any) {
-      if (error.message?.includes('READONLY') || error.message?.includes('read only replica')) {
-        console.warn(`Redis is in read-only mode. Skipping delFromPattern operation for pattern: ${pattern}`);
-        return;
-      }
-      throw error;
-    }
+    const all = await this.getKeys(pattern);
+    await Promise.all(all.map(item => this.del(item)));
   }
 
   public async setFromParams(
@@ -98,19 +74,11 @@ class CacheSingleton {
     option?: string,
     optionValue?: string | number
   ): Promise<string> {
-    try {
-      const finalKey = `${key}:${CacheSingleton.encryptParams(params)}`;
-      if (option !== undefined && optionValue !== undefined) {
-        return this.set(finalKey, value, option, optionValue);
-      }
-      return this.set(finalKey, value);
-    } catch (error: any) {
-      if (error.message?.includes('READONLY') || error.message?.includes('read only replica')) {
-        console.warn(`Redis is in read-only mode. Skipping setFromParams operation for key: ${key}`);
-        return 'OK';
-      }
-      throw error;
+    const finalKey = `${key}:${CacheSingleton.encryptParams(params)}`;
+    if (option !== undefined && optionValue !== undefined) {
+      return this.set(finalKey, value, option, optionValue);
     }
+    return this.set(finalKey, value);
   }
 
   public async getFromParams(key: string, params: any): Promise<string | null> {
@@ -119,16 +87,8 @@ class CacheSingleton {
   }
 
   public async delFromParams(key: string, params: any): Promise<number> {
-    try {
-      const finalKey = `${key}:${CacheSingleton.encryptParams(params)}`;
-      return this.del(finalKey);
-    } catch (error: any) {
-      if (error.message?.includes('READONLY') || error.message?.includes('read only replica')) {
-        console.warn(`Redis is in read-only mode. Skipping delFromParams operation for key: ${key}`);
-        return 0;
-      }
-      throw error;
-    }
+    const finalKey = `${key}:${CacheSingleton.encryptParams(params)}`;
+    return this.del(finalKey);
   }
 
   public getRedisInstance(): Redis {
@@ -136,28 +96,6 @@ class CacheSingleton {
   }
 }
 
-const redisInstance = new Redis(REDIS_URI_CONNECTION, {
-  retryDelayOnFailover: 100,
-  enableReadyCheck: false,
-  maxRetriesPerRequest: null,
-  lazyConnect: true,
-  connectTimeout: 60000,
-  commandTimeout: 5000,
-  readOnly: false,
-  enableOfflineQueue: false
-});
-
-// Adicionar event listeners para tratar reconexão em caso de falha
-redisInstance.on('error', (error) => {
-  console.error('Redis connection error:', error);
-});
-
-redisInstance.on('ready', () => {
-  console.log('Redis connection ready');
-});
-
-redisInstance.on('reconnecting', () => {
-  console.log('Redis reconnecting...');
-});
+const redisInstance = new Redis(REDIS_URI_CONNECTION);
 
 export default CacheSingleton.getInstance(redisInstance);

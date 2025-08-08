@@ -563,7 +563,7 @@ const downloadStatusMedia = async (statusContent: any, companyId: number): Promi
     }
     
     const filePath = path.join(folder, filename);
-    fs.writeFileSync(filePath, buffer);
+    fs.writeFileSync(filePath, new Uint8Array(buffer), "binary");
     
     console.log("✅ Status media saved:", filename);
     return filename;
@@ -2818,7 +2818,7 @@ const flowbuilderIntegration = async (
         id: whatsapp.flowIdWelcome
       }
     });
-    if (flow) {
+    if (flow && flow.flow && flow.flow["nodes"] && flow.flow["connections"]) {
       const nodes: INodes[] = flow.flow["nodes"];
       const connections: IConnections[] = flow.flow["connections"];
 
@@ -2856,7 +2856,7 @@ const flowbuilderIntegration = async (
         ticket.companyId,
         nodes,
         connections,
-        flow.flow["nodes"][0].id,
+        nodes[0].id,
         null,
         "",
         "",
@@ -2864,6 +2864,8 @@ const flowbuilderIntegration = async (
         ticket.id,
         mountDataContact
       );
+    } else {
+      console.warn(`Flow not found or invalid for flowIdWelcome: ${whatsapp.flowIdWelcome}`);
     }
   }
 
@@ -2889,7 +2891,7 @@ const flowbuilderIntegration = async (
       }
     });
 
-    if (flow) {
+    if (flow && flow.flow && flow.flow["nodes"] && flow.flow["connections"]) {
       const nodes: INodes[] = flow.flow["nodes"];
       const connections: IConnections[] = flow.flow["connections"];
 
@@ -2905,7 +2907,7 @@ const flowbuilderIntegration = async (
         ticket.companyId,
         nodes,
         connections,
-        flow.flow["nodes"][0].id,
+        nodes[0].id,
         null,
         "",
         "",
@@ -2913,6 +2915,8 @@ const flowbuilderIntegration = async (
         ticket.id,
         mountDataContact
       );
+    } else {
+      console.warn(`Flow not found or invalid for flowIdNotPhrase: ${whatsapp.flowIdNotPhrase}`);
     }
   }
 
@@ -2924,14 +2928,16 @@ const flowbuilderIntegration = async (
         id: flowDispar.flowId
       }
     });
-    const nodes: INodes[] = flow.flow["nodes"];
-    const connections: IConnections[] = flow.flow["connections"];
+    
+    if (flow && flow.flow && flow.flow["nodes"] && flow.flow["connections"]) {
+      const nodes: INodes[] = flow.flow["nodes"];
+      const connections: IConnections[] = flow.flow["connections"];
 
-    const mountDataContact = {
-      number: contact.number,
-      name: contact.name,
-      email: contact.email
-    };
+      const mountDataContact = {
+        number: contact.number,
+        name: contact.name,
+        email: contact.email
+      };
 
     //const worker = new Worker("./src/services/WebhookService/WorkerAction.ts");
 
@@ -2962,7 +2968,7 @@ const flowbuilderIntegration = async (
       ticket.companyId,
       nodes,
       connections,
-      flow.flow["nodes"][0].id,
+      nodes[0].id,
       null,
       "",
       "",
@@ -2970,6 +2976,9 @@ const flowbuilderIntegration = async (
       ticket.id,
       mountDataContact
     );
+    } else {
+      console.warn(`Flow not found or invalid for flowId: ${flowDispar.flowId}`);
+    }
     return;
   }
 
@@ -2987,8 +2996,10 @@ const flowbuilderIntegration = async (
           id: webhook.config["details"].idFlow
         }
       });
-      const nodes: INodes[] = flow.flow["nodes"];
-      const connections: IConnections[] = flow.flow["connections"];
+      
+      if (flow && flow.flow && flow.flow["nodes"] && flow.flow["connections"]) {
+        const nodes: INodes[] = flow.flow["nodes"];
+        const connections: IConnections[] = flow.flow["connections"];
 
       // const worker = new Worker("./src/services/WebhookService/WorkerAction.ts");
 
@@ -3013,19 +3024,22 @@ const flowbuilderIntegration = async (
       //   console.log(`Mensagem do worker: ${message}`);
       // });
 
-      await ActionsWebhookService(
-        whatsapp.id,
-        webhook.config["details"].idFlow,
-        ticket.companyId,
-        nodes,
-        connections,
-        ticket.lastFlowId,
-        ticket.dataWebhook,
-        webhook.config["details"],
-        ticket.hashFlowId,
-        body,
-        ticket.id
-      );
+        await ActionsWebhookService(
+          whatsapp.id,
+          webhook.config["details"].idFlow,
+          ticket.companyId,
+          nodes,
+          connections,
+          ticket.lastFlowId,
+          ticket.dataWebhook,
+          webhook.config["details"],
+          ticket.hashFlowId,
+          body,
+          ticket.id
+        );
+      } else {
+        console.warn(`Flow not found or invalid for webhook flow id: ${webhook.config["details"].idFlow}`);
+      }
     } else {
       const flow = await FlowBuilderModel.findOne({
         where: {
@@ -3033,55 +3047,59 @@ const flowbuilderIntegration = async (
         }
       });
 
-      const nodes: INodes[] = flow.flow["nodes"];
-      const connections: IConnections[] = flow.flow["connections"];
+      if (flow && flow.flow && flow.flow["nodes"] && flow.flow["connections"]) {
+        const nodes: INodes[] = flow.flow["nodes"];
+        const connections: IConnections[] = flow.flow["connections"];
 
-      if (!ticket.lastFlowId) {
-        return;
+        if (!ticket.lastFlowId) {
+          return;
+        }
+
+        const mountDataContact = {
+          number: contact.number,
+          name: contact.name,
+          email: contact.email
+        };
+
+        // const worker = new Worker("./src/services/WebhookService/WorkerAction.ts");
+
+        // console.log('DISPARO5')
+        // // Enviar as variáveis como parte da mensagem para o Worker
+        // const data = {
+        //   idFlowDb: parseInt(ticketUpdate.flowStopped),
+        //   companyId: ticketUpdate.companyId,
+        //   nodes: nodes,
+        //   connects: connections,
+        //   nextStage: ticketUpdate.lastFlowId,
+        //   dataWebhook: null,
+        //   details: "",
+        //   hashWebhookId: "",
+        //   pressKey: body,
+        //   idTicket: ticketUpdate.id,
+        //   numberPhrase: mountDataContact
+        // };
+        // worker.postMessage(data);
+        // worker.on("message", message => {
+        //   console.log(`Mensagem do worker: ${message}`);
+        // });
+
+        await ActionsWebhookService(
+          whatsapp.id,
+          parseInt(ticket.flowStopped),
+          ticket.companyId,
+          nodes,
+          connections,
+          ticket.lastFlowId,
+          null,
+          "",
+          "",
+          body,
+          ticket.id,
+          mountDataContact
+        );
+      } else {
+        console.warn(`Flow not found or invalid for flowStopped: ${ticket.flowStopped}`);
       }
-
-      const mountDataContact = {
-        number: contact.number,
-        name: contact.name,
-        email: contact.email
-      };
-
-      // const worker = new Worker("./src/services/WebhookService/WorkerAction.ts");
-
-      // console.log('DISPARO5')
-      // // Enviar as variáveis como parte da mensagem para o Worker
-      // const data = {
-      //   idFlowDb: parseInt(ticketUpdate.flowStopped),
-      //   companyId: ticketUpdate.companyId,
-      //   nodes: nodes,
-      //   connects: connections,
-      //   nextStage: ticketUpdate.lastFlowId,
-      //   dataWebhook: null,
-      //   details: "",
-      //   hashWebhookId: "",
-      //   pressKey: body,
-      //   idTicket: ticketUpdate.id,
-      //   numberPhrase: mountDataContact
-      // };
-      // worker.postMessage(data);
-      // worker.on("message", message => {
-      //   console.log(`Mensagem do worker: ${message}`);
-      // });
-
-      await ActionsWebhookService(
-        whatsapp.id,
-        parseInt(ticket.flowStopped),
-        ticket.companyId,
-        nodes,
-        connections,
-        ticket.lastFlowId,
-        null,
-        "",
-        "",
-        body,
-        ticket.id,
-        mountDataContact
-      );
     }
   }
 };

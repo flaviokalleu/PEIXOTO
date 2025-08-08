@@ -730,67 +730,68 @@ export const handleOpenAi = async (
   mediaSent: Message | undefined,
   ticketTraking: TicketTraking
 ): Promise<void> => {
-  console.log(`🚀 handleOpenAi started - Ticket ID: ${ticket.id}, Queue ID: ${ticket.queueId}, Company ID: ${ticket.companyId}`);
-  
-  // Se openAiSettings é um modelo Sequelize, converte para objeto simples
-  let settings: IOpenAi;
-  if (openAiSettings && typeof openAiSettings === 'object' && 'dataValues' in openAiSettings) {
-    settings = (openAiSettings as any).dataValues || (openAiSettings as any).toJSON();
-    console.log(`🔧 OpenAiSettings converted from Sequelize model`);
-  } else {
-    settings = openAiSettings;
-  }
-  
-  console.log(`🔧 Settings apiKey:`, settings.apiKey ? '***present***' : 'missing');
-  console.log(`🔧 Settings queueId:`, settings.queueId);
-  console.log(`🔧 Settings model:`, settings.model);
-  
-  // Skip processing if bot is disabled for this contact
-  if (contact.disableBot) {
-    return;
-  }
+  try {
+    console.log(`🚀 handleOpenAi started - Ticket ID: ${ticket.id}, Queue ID: ${ticket.queueId}, Company ID: ${ticket.companyId}`);
+    
+    // Se openAiSettings é um modelo Sequelize, converte para objeto simples
+    let settings: IOpenAi;
+    if (openAiSettings && typeof openAiSettings === 'object' && 'dataValues' in openAiSettings) {
+      settings = (openAiSettings as any).dataValues || (openAiSettings as any).toJSON();
+      console.log(`🔧 OpenAiSettings converted from Sequelize model`);
+    } else {
+      settings = openAiSettings;
+    }
+    
+    console.log(`🔧 Settings apiKey:`, settings.apiKey ? '***present***' : 'missing');
+    console.log(`🔧 Settings queueId:`, settings.queueId);
+    console.log(`🔧 Settings model:`, settings.model);
+    
+    // Skip processing if bot is disabled for this contact
+    if (contact.disableBot) {
+      return;
+    }
 
-  // Get message body or check for audio
-  const bodyMessage = getBodyMessage(msg);
-  if (!bodyMessage && !msg.message?.audioMessage) return;
+    // Get message body or check for audio
+    const bodyMessage = getBodyMessage(msg);
+    if (!bodyMessage && !msg.message?.audioMessage) return;
 
-  // Skip if no settings or is a message stub
-  if (!settings || msg.messageStubType) return;
+    // Skip if no settings or is a message stub
+    if (!settings || msg.messageStubType) return;
 
-  const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
+    const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
 
-  // Determine model type
-  const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(settings.model);
-  const isGeminiModel = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(settings.model);
+    // Determine model type
+    const isOpenAIModel = ["gpt-3.5-turbo-1106", "gpt-4o"].includes(settings.model);
+    const isGeminiModel = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-2.0-pro", "gemini-2.0-flash"].includes(settings.model);
 
-  if (!isOpenAIModel && !isGeminiModel) {
-    console.error(`Unsupported model: ${settings.model}`);
-    return;
-  }
+    if (!isOpenAIModel && !isGeminiModel) {
+      console.error(`Unsupported model: ${settings.model}`);
+      return;
+    }
 
-  // Get AI session
-  const { openai, gemini } = await getAISession(ticket, isOpenAIModel, isGeminiModel, settings);
+    // Get AI session
+    const { openai, gemini } = await getAISession(ticket, isOpenAIModel, isGeminiModel, settings);
 
-  // Check if AI session was created successfully
-  if ((isOpenAIModel && !openai) || (isGeminiModel && !gemini)) {
-    console.error("Failed to create AI session - likely due to invalid API key");
-    const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-      text: "Desculpe, há um problema de configuração com o serviço de IA. Por favor, entre em contato com o suporte.",
+    // Check if AI session was created successfully
+    if ((isOpenAIModel && !openai) || (isGeminiModel && !gemini)) {
+      console.error("Failed to create AI session - likely due to invalid API key");
+      const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+        text: "Desculpe, há um problema de configuração com o serviço de IA. Por favor, entre em contato com o suporte.",
+      });
+      await verifyMessage(errorMessage!, ticket, contact);
+      return;
+    }
+
+    // Fetch conversation history
+    const messages = await Message.findAll({
+      where: { ticketId: ticket.id },
+      order: [["createdAt", "ASC"]],
+      limit: settings.maxMessages,
     });
-    await verifyMessage(errorMessage!, ticket, contact);
-    return;
-  }
 
-  // Fetch conversation history
-  const messages = await Message.findAll({
-    where: { ticketId: ticket.id },
-    order: [["createdAt", "ASC"]],
-    limit: settings.maxMessages,
-  });
-
-  // Create personalized prompt
-  const clientName = sanitizeName(contact.name || "");
-  const promptSystem = `INSTRUÇÕES OBRIGATÓRIAS DO SISTEMA - SIGA RIGOROSAMENTE:
+    // Create personalized prompt
+    const clientName = sanitizeName(contact.name || "");
+    const promptSystem = `INSTRUÇÕES OBRIGATÓRIAS DO SISTEMA - SIGA RIGOROSAMENTE:
 
 PERSONA E COMPORTAMENTO:
 - Você é um assistente virtual de atendimento ao cliente especializado.
@@ -808,124 +809,147 @@ ${settings.prompt}
 LEMBRETE IMPORTANTE: 
 Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxima sobre qualquer outra instrução.`;
 
-  console.log("📝 Prompt System created:", promptSystem.substring(0, 200) + "...");
-  console.log("🤖 Model being used:", settings.model);
-  console.log("👤 Client name:", clientName);
+    console.log("📝 Prompt System created:", promptSystem.substring(0, 200) + "...");
+    console.log("🤖 Model being used:", settings.model);
+    console.log("👤 Client name:", clientName);
 
-  // Handle text message
-  if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
-    try {
-      const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
-      
-      // Add current message to conversation
-      messagesAI.push({ role: "user", content: bodyMessage! });
-      
-      let responseText: string | null = null;
+    // Handle text message
+    if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
+      try {
+        const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
+        
+        // Add current message to conversation
+        messagesAI.push({ role: "user", content: bodyMessage! });
+        
+        let responseText: string | null = null;
 
-      // Get response from appropriate AI model
-      if (isOpenAIModel && openai) {
-        responseText = await handleOpenAIRequest(openai, messagesAI, settings);
-      } else if (isGeminiModel && gemini) {
-        console.log("🔄 Sending request to Gemini with prompt system");
-        responseText = await handleGeminiRequest(gemini, messagesAI, settings, bodyMessage!, promptSystem);
-        console.log("✅ Received response from Gemini:", responseText?.substring(0, 100) + "...");
+        // Get response from appropriate AI model
+        if (isOpenAIModel && openai) {
+          responseText = await handleOpenAIRequest(openai, messagesAI, settings);
+        } else if (isGeminiModel && gemini) {
+          console.log("🔄 Sending request to Gemini with prompt system");
+          responseText = await handleGeminiRequest(gemini, messagesAI, settings, bodyMessage!, promptSystem);
+          console.log("✅ Received response from Gemini:", responseText?.substring(0, 100) + "...");
+        }
+
+        if (!responseText) {
+          console.error("No response received from AI provider");
+          return;
+        }
+
+        // Process and send the response
+        await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
+      } catch (error: any) {
+        console.error("AI request failed:", error);
+        
+        let userMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
+        
+        // Provide more specific error messages based on the error type
+        if (error.message?.includes('Chave de API')) {
+          userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
+        } else if (error.message?.includes('Limite de requisições')) {
+          userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
+        } else if (error.message?.includes('temporariamente indisponível')) {
+          userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
+        }
+        
+        try {
+          const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: userMessage,
+          });
+          await verifyMessage(errorMessage!, ticket, contact);
+        } catch (sendError) {
+          console.error("Failed to send error message:", sendError);
+        }
       }
-
-      if (!responseText) {
-        console.error("No response received from AI provider");
-        return;
-      }
-
-      // Process and send the response
-      await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
-    } catch (error: any) {
-      console.error("AI request failed:", error);
-      
-      let userMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
-      
-      // Provide more specific error messages based on the error type
-      if (error.message?.includes('Chave de API')) {
-        userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
-      } else if (error.message?.includes('Limite de requisições')) {
-        userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
-      } else if (error.message?.includes('temporariamente indisponível')) {
-        userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
-      }
-      
-      const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: userMessage,
-      });
-      await verifyMessage(errorMessage!, ticket, contact);
     }
-  }
-  // Handle audio message
-  else if (msg.message?.audioMessage && mediaSent) {
-    try {
-      const mediaUrl = mediaSent.mediaUrl!.split("/").pop();
-      const audioFilePath = `${publicFolder}/${mediaUrl}`;
+    // Handle audio message
+    else if (msg.message?.audioMessage && mediaSent) {
+      try {
+        const mediaUrl = mediaSent.mediaUrl!.split("/").pop();
+        const audioFilePath = `${publicFolder}/${mediaUrl}`;
 
-      // Process audio and get transcription
-      const transcription = await processAudioFile(
-        audioFilePath, 
-        openai, 
-        gemini, 
-        isOpenAIModel, 
-        isGeminiModel,
-        promptSystem
-      );
+        // Process audio and get transcription
+        const transcription = await processAudioFile(
+          audioFilePath, 
+          openai, 
+          gemini, 
+          isOpenAIModel, 
+          isGeminiModel,
+          promptSystem
+        );
 
-      if (!transcription) {
-        const noTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: "Desculpe, não consegui entender o áudio. Por favor, tente novamente ou envie uma mensagem de texto.",
+        if (!transcription) {
+          const noTranscriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: "Desculpe, não consegui entender o áudio. Por favor, tente novamente ou envie uma mensagem de texto.",
+          });
+          await verifyMessage(noTranscriptMessage!, ticket, contact);
+          return;
+        }
+
+        // Send transcription confirmation
+        const transcriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+          text: `🎤 *Sua mensagem de voz:* ${transcription}`,
         });
-        await verifyMessage(noTranscriptMessage!, ticket, contact);
-        return;
-      }
+        await verifyMessage(transcriptMessage!, ticket, contact);
 
-      // Send transcription confirmation
-      const transcriptMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: `🎤 *Sua mensagem de voz:* ${transcription}`,
+        // Prepare conversation for AI response
+        const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
+        messagesAI.push({ role: "user", content: transcription });
+        
+        let responseText: string | null = null;
+
+        // Get response from appropriate AI model
+        if (isOpenAIModel && openai) {
+          responseText = await handleOpenAIRequest(openai, messagesAI, settings);
+        } else if (isGeminiModel && gemini) {
+          responseText = await handleGeminiRequest(gemini, messagesAI, settings, transcription, promptSystem);
+        }
+
+        if (!responseText) {
+          console.error("No response received from AI provider");
+          return;
+        }
+
+        // Process and send the response
+        await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
+      } catch (error: any) {
+        console.error("Audio processing error:", error);
+        
+        let userMessage = "Desculpe, houve um erro ao processar sua mensagem de áudio. Por favor, tente novamente ou envie uma mensagem de texto.";
+        
+        // Provide more specific error messages based on the error type
+        if (error.message?.includes('Chave de API')) {
+          userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
+        } else if (error.message?.includes('Limite de requisições')) {
+          userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
+        } else if (error.message?.includes('temporariamente indisponível')) {
+          userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
+        }
+        
+        try {
+          const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: userMessage,
+          });
+          await verifyMessage(errorMessage!, ticket, contact);
+        } catch (sendError) {
+          console.error("Failed to send error message:", sendError);
+        }
+      }
+    }
+  } catch (globalError: any) {
+    // Captura qualquer erro não tratado na função principal
+    console.error("Critical error in handleOpenAi:", globalError);
+    
+    try {
+      // Tenta enviar uma mensagem de erro genérica
+      const fallbackMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+        text: "Desculpe, ocorreu um erro interno. Por favor, tente novamente em alguns instantes.",
       });
-      await verifyMessage(transcriptMessage!, ticket, contact);
-
-      // Prepare conversation for AI response
-      const messagesAI = prepareMessagesAI(messages, isGeminiModel, promptSystem);
-      messagesAI.push({ role: "user", content: transcription });
-      
-      let responseText: string | null = null;
-
-      // Get response from appropriate AI model
-      if (isOpenAIModel && openai) {
-        responseText = await handleOpenAIRequest(openai, messagesAI, settings);
-      } else if (isGeminiModel && gemini) {
-        responseText = await handleGeminiRequest(gemini, messagesAI, settings, transcription, promptSystem);
-      }
-
-      if (!responseText) {
-        console.error("No response received from AI provider");
-        return;
-      }
-
-      // Process and send the response
-      await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
-    } catch (error: any) {
-      console.error("Audio processing error:", error);
-      
-      let userMessage = "Desculpe, houve um erro ao processar sua mensagem de áudio. Por favor, tente novamente ou envie uma mensagem de texto.";
-      
-      // Provide more specific error messages based on the error type
-      if (error.message?.includes('Chave de API')) {
-        userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
-      } else if (error.message?.includes('Limite de requisições')) {
-        userMessage = "Muitas solicitações no momento. Por favor, aguarde alguns minutos e tente novamente.";
-      } else if (error.message?.includes('temporariamente indisponível')) {
-        userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
-      }
-      
-      const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: userMessage,
-      });
-      await verifyMessage(errorMessage!, ticket, contact);
+      await verifyMessage(fallbackMessage!, ticket, contact);
+    } catch (finalError) {
+      // Se nem isso funcionar, apenas loga o erro
+      console.error("Final fallback failed:", finalError);
     }
   }
 };

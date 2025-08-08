@@ -14,6 +14,7 @@ import "./database";
 import uploadConfig from "./config/upload";
 import AppError from "./errors/AppError";
 import routes from "./routes";
+import healthRoutes from "./routes/healthRoutes";
 import logger from "./utils/logger";
 import { messageQueue, sendScheduledMessages } from "./queues";
 import BullQueue from "./libs/queue"
@@ -88,6 +89,7 @@ app.use("/public", express.static(uploadConfig.directory));
 
 
 // Rotas
+app.use("/api", healthRoutes); // Rotas de saúde do sistema
 app.use(routes);
 
 // Manipulador de erros do Sentry
