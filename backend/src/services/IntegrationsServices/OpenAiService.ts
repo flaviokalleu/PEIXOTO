@@ -315,51 +315,12 @@ const processResponse = async (
   // Handle image URLs in the response before sending text
   response = await handleImageUrls(response, wbot, msg, ticket, contact, publicFolder);
 
-  // Send response based on preferred format (text or voice)
-  if (openAiSettings.voice === "texto") {
-    if (response && response.trim() !== '') {
-      const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-        text: `\u200e ${response}`,
-      });
-      await verifyMessage(sentMessage!, ticket, contact);
-    }
-  } else {
-    const fileNameWithOutExtension = `${ticket.id}_${Date.now()}`;
-    try {
-      await convertTextToSpeechAndSaveToFile(
-        keepOnlySpecifiedChars(response),
-        `${publicFolder}/${fileNameWithOutExtension}`,
-        openAiSettings.voiceKey,
-        openAiSettings.voiceRegion,
-        openAiSettings.voice,
-        "mp3"
-      );
-      
-      const audioPath = `${publicFolder}/${fileNameWithOutExtension}.mp3`;
-      if (fs.existsSync(audioPath)) {
-        const sendMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          audio: { url: audioPath },
-          mimetype: "audio/mpeg",
-          ptt: true,
-        });
-        await verifyMediaMessage(sendMessage!, ticket, contact, ticketTraking, false, false, wbot);
-      } else {
-        throw new Error("Audio file was not created successfully");
-      }
-      
-      // Cleanup files
-      deleteFileSync(`${publicFolder}/${fileNameWithOutExtension}.mp3`);
-      deleteFileSync(`${publicFolder}/${fileNameWithOutExtension}.wav`);
-    } catch (error) {
-      console.error(`Error responding with audio: ${error}`);
-      // Fallback to text response
-      if (response && response.trim() !== '') {
-        const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-          text: `\u200e ${response}`,
-        });
-        await verifyMessage(sentMessage!, ticket, contact);
-      }
-    }
+  // Sempre enviar resposta em texto (não gerar áudio)
+  if (response && response.trim() !== '') {
+    const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+      text: `\u200e ${response}`,
+    });
+    await verifyMessage(sentMessage!, ticket, contact);
   }
 };
 
@@ -640,6 +601,21 @@ const getAISession = async (
     }
   }
 
+  // Sanitize API key (remove whitespace, newlines)
+  if (apiKey) {
+    const originalApiKey = apiKey;
+    apiKey = apiKey.trim().replace(/\s+/g, '');
+    if (originalApiKey !== apiKey) {
+      console.log("⚠️ API key sanitized (whitespace removed)");
+    }
+    // Log only first and last 4 chars for debug
+    if (apiKey.length > 8) {
+      console.log(`🔑 Gemini API key (partial): ${apiKey.slice(0,4)}...${apiKey.slice(-4)}`);
+    } else {
+      console.log(`🔑 Gemini API key length: ${apiKey.length}`);
+    }
+  }
+
   // Final fallback to environment variables - REMOVIDO
   // if (!apiKey || apiKey.trim() === '') {
   //   if (isGeminiModel) {
@@ -832,8 +808,13 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
           console.log("✅ Received response from Gemini:", responseText?.substring(0, 100) + "...");
         }
 
-        if (!responseText) {
+        if (!responseText || responseText.trim() === "") {
           console.error("No response received from AI provider");
+          // Só envia mensagem de erro se realmente não houver resposta
+          const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.",
+          });
+          await verifyMessage(errorMessage!, ticket, contact);
           return;
         }
 
@@ -841,10 +822,8 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
         await processResponse(responseText, wbot, msg, ticket, contact, settings, ticketTraking);
       } catch (error: any) {
         console.error("AI request failed:", error);
-        
-        let userMessage = "Desculpe, estou com dificuldades técnicas para processar sua solicitação no momento. Por favor, tente novamente mais tarde.";
-        
-        // Provide more specific error messages based on the error type
+        // Só envia mensagem de erro específica se for realmente erro de chave ou limite
+        let userMessage = null;
         if (error.message?.includes('Chave de API')) {
           userMessage = "Há um problema com a configuração da IA. Por favor, entre em contato com o suporte.";
         } else if (error.message?.includes('Limite de requisições')) {
@@ -852,15 +831,17 @@ Siga TODAS estas instruções em cada resposta. Este prompt tem prioridade máxi
         } else if (error.message?.includes('temporariamente indisponível')) {
           userMessage = "O serviço de IA está temporariamente indisponível. Por favor, tente novamente em alguns minutos.";
         }
-        
-        try {
-          const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-            text: userMessage,
-          });
-          await verifyMessage(errorMessage!, ticket, contact);
-        } catch (sendError) {
-          console.error("Failed to send error message:", sendError);
+        if (userMessage) {
+          try {
+            const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+              text: userMessage,
+            });
+            await verifyMessage(errorMessage!, ticket, contact);
+          } catch (sendError) {
+            console.error("Failed to send error message:", sendError);
+          }
         }
+        // Se não for erro conhecido, não envia fallback, apenas loga
       }
     }
     // Handle audio message
