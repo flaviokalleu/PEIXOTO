@@ -180,7 +180,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const io = getIO();
   io.of(String(companyId))
     .emit(`company-${companyId}-whatsapp`, {
-      action: "update",
+      action: whatsapp.id ? "update" : "create",
       whatsapp
     });
 
@@ -315,10 +315,16 @@ export const storeFacebook = async (
 
         io.of(String(companyId))
           .emit(`company-${companyId}-whatsapp`, {
-            action: "update",
+            action: "create",
             whatsapp
           });
 
+      } else {
+        io.of(String(companyId))
+          .emit(`company-${companyId}-whatsapp`, {
+            action: "update",
+            whatsapp: exist
+          });
       }
     }
     return res.status(200);

@@ -123,10 +123,28 @@ const Connections = () => {
       }
     };
 
+    const handleWhatsAppUpdate = (data) => {
+      if (!isMounted.current) return;
+      console.log("WhatsApp socket update:", data);
+      // Force refresh to get latest data
+      window.location.reload();
+    };
+
+    const handleWhatsAppSession = (data) => {
+      if (!isMounted.current) return;
+      console.log("WhatsApp session update:", data);
+      // Force refresh to get latest session status
+      window.location.reload();
+    };
+
     socket.on(`importMessages-${companyId}`, handleSocketEvent);
+    socket.on(`company-${companyId}-whatsapp`, handleWhatsAppUpdate);
+    socket.on(`company-${companyId}-whatsappSession`, handleWhatsAppSession);
 
     return () => {
       socket.off(`importMessages-${companyId}`, handleSocketEvent);
+      socket.off(`company-${companyId}-whatsapp`, handleWhatsAppUpdate);
+      socket.off(`company-${companyId}-whatsappSession`, handleWhatsAppSession);
     };
   }, [socket, companyId, history]);
 

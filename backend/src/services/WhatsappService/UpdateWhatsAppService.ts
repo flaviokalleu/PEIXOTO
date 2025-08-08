@@ -1,6 +1,6 @@
 import * as Yup from "yup";
 import { Op } from "sequelize";
-
+import { getIO } from "../../libs/socket";
 import AppError from "../../errors/AppError";
 import Whatsapp from "../../models/Whatsapp";
 import ShowWhatsAppService from "./ShowWhatsAppService";
@@ -181,6 +181,13 @@ const UpdateWhatsAppService = async ({
   if (!requestQR) {
     await AssociateWhatsappQueue(whatsapp, queueIds);
   }
+
+  const io = getIO();
+  io.of(String(companyId))
+    .emit(`company-${companyId}-whatsapp`, {
+      action: "update",
+      whatsapp
+    });
 
   return { whatsapp, oldDefaultWhatsapp };
 };

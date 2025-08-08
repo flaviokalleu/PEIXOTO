@@ -1,5 +1,5 @@
 import * as Yup from "yup";
-
+import { getIO } from "../../libs/socket";
 import AppError from "../../errors/AppError";
 import Whatsapp from "../../models/Whatsapp";
 import Company from "../../models/Company";
@@ -241,6 +241,13 @@ const CreateWhatsAppService = async ({
   );
 
   await AssociateWhatsappQueue(whatsapp, queueIds);
+
+  const io = getIO();
+  io.of(String(companyId))
+    .emit(`company-${companyId}-whatsapp`, {
+      action: "create",
+      whatsapp
+    });
 
   return { whatsapp, oldDefaultWhatsapp };
 };

@@ -88,6 +88,9 @@ const useWhatsApps = () => {
         if (data.action === "update") {
           dispatch({ type: "UPDATE_WHATSAPPS", payload: data.whatsapp });
         }
+        if (data.action === "create") {
+          dispatch({ type: "UPDATE_WHATSAPPS", payload: data.whatsapp });
+        }
         if (data.action === "delete") {
           dispatch({ type: "DELETE_WHATSAPPS", payload: data.whatsappId });
         }
