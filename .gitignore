@@ -1,4 +1,4 @@
 node_modules/
 dist/
 build/
-backend/src/libs/socket.ts
+backend/public/
