@@ -36,11 +36,21 @@ const os = require("os");
 
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
 
-// Prefer Opus (OGG) for WhatsApp voice notes
+const ensureDir = (dir: string) => {
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  } catch {}
+};
+
+// Prefer Opus (OGG) para WhatsApp voice notes com waveform
 const processAudioOpus = async (audio: string, companyId: string): Promise<string> => {
-  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.ogg`;
+  const companyDir = `${publicFolder}/company${companyId}`;
+  ensureDir(companyDir);
+  const outputAudio = `${companyDir}/${new Date().getTime()}.ogg`;
   return new Promise((resolve, reject) => {
-    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 24000 -ac 1 -c:a libopus -b:a 32k -application voip "${outputAudio}"`;
+    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 16000 -ac 1 -c:a libopus -b:a 32k -compression_level 10 -frame_duration 60 -application voip "${outputAudio}"`;
     exec(cmd, (error, _stdout, _stderr) => {
       if (error) return reject(error);
       resolve(outputAudio);
@@ -48,11 +58,13 @@ const processAudioOpus = async (audio: string, companyId: string): Promise<strin
   });
 };
 
-// MP3 fallback if Opus is not available in ffmpeg build
+// MP3 fallback com configurações para voice note
 const processAudioMp3 = async (audio: string, companyId: string): Promise<string> => {
-  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.mp3`;
+  const companyDir = `${publicFolder}/company${companyId}`;
+  ensureDir(companyDir);
+  const outputAudio = `${companyDir}/${new Date().getTime()}.mp3`;
   return new Promise((resolve, reject) => {
-    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 24000 -ac 1 -c:a libmp3lame -b:a 96k "${outputAudio}"`;
+    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 16000 -ac 1 -c:a libmp3lame -b:a 32k "${outputAudio}"`;
     exec(cmd, (error, _stdout, _stderr) => {
       if (error) return reject(error);
       resolve(outputAudio);
@@ -63,7 +75,9 @@ const processAudioMp3 = async (audio: string, companyId: string): Promise<string
 
 const processAudioFile = async (audio: string, companyId: string): Promise<string> => {
   // keep MP3 for generic conversion usages
-  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.mp3`;
+  const companyDir = `${publicFolder}/company${companyId}`;
+  ensureDir(companyDir);
+  const outputAudio = `${companyDir}/${new Date().getTime()}.mp3`;
   return new Promise((resolve, reject) => {
     const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 24000 -ac 1 -c:a libmp3lame -b:a 96k "${outputAudio}"`;
     exec(cmd, (error, _stdout, _stderr) => {
@@ -96,27 +110,29 @@ export const getMessageOptions = async (
         // gifPlayback: true
       };
     } else if (typeMessage === "audio") {
+      // Sempre enviar áudio como voice note gravado na hora
       try {
-        // 1) Try Opus OGG for true voice note
         const convertOgg = await processAudioOpus(pathMedia, companyId);
+        let seconds = 1; try { const bytes = fs.statSync(convertOgg).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
         options = {
           audio: fs.readFileSync(convertOgg),
           mimetype: "audio/ogg; codecs=opus",
-          ptt: true
+          ptt: true,
+          seconds
         };
         try { unlinkSync(convertOgg); } catch {}
       } catch (_e1) {
         try {
-          // 2) Fallback to MP3 but still with ptt
           const convertMp3 = await processAudioMp3(pathMedia, companyId);
+          let seconds = 1; try { const bytes = fs.statSync(convertMp3).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
           options = {
             audio: fs.readFileSync(convertMp3),
             mimetype: "audio/mpeg",
-            ptt: true
+            ptt: true,
+            seconds
           };
           try { unlinkSync(convertMp3); } catch {}
         } catch (_e2) {
-          // 3) Ultimate fallback: send original
           options = {
             audio: fs.readFileSync(pathMedia),
             mimetype: mimeType || "audio/mpeg",
@@ -180,37 +196,33 @@ const SendWhatsAppMedia = async ({
       };
       bodyTicket = "🎥 Arquivo de vídeo"
     } else if (typeMessage === "audio") {
+      // Sempre enviar áudio como voice note gravado na hora
       try {
-        // 1) Try Opus OGG for voice note
         const convertOgg = await processAudioOpus(media.path, companyId);
+        let seconds = 1; try { const bytes = fs.statSync(convertOgg).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
         options = {
           audio: fs.readFileSync(convertOgg),
           mimetype: "audio/ogg; codecs=opus",
           ptt: true,
-          caption: bodyMedia,
-          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+          seconds
         };
         try { unlinkSync(convertOgg); } catch {}
       } catch (_e1) {
         try {
-          // 2) Fallback MP3 with ptt
           const convertMp3 = await processAudioMp3(media.path, companyId);
+          let seconds = 1; try { const bytes = fs.statSync(convertMp3).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
           options = {
             audio: fs.readFileSync(convertMp3),
             mimetype: "audio/mpeg",
             ptt: true,
-            caption: bodyMedia,
-            contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+            seconds
           };
           try { unlinkSync(convertMp3); } catch {}
         } catch (_e2) {
-          // 3) Fallback original
           options = {
             audio: fs.readFileSync(media.path),
             mimetype: media.mimetype || "audio/mpeg",
-            ptt: true,
-            caption: bodyMedia,
-            contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+            ptt: true
           };
         }
       }
