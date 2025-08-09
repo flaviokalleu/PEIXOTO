@@ -65,12 +65,12 @@ import MessageUploadMedias from "../MessageUploadMedias";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 import ScheduleModal from "../ScheduleModal";
 import { useParams } from "react-router-dom/cjs/react-router-dom.min";
-// MediaRecorder state
-const mediaRecorderRef = React.useRef(null);
-const mediaStreamRef = React.useRef(null);
-const audioChunksRef = React.useRef([]);
-const chosenMimeTypeRef = React.useRef(null);
-const audioFileInputRef = React.useRef(null);
+// MediaRecorder state (avoid hooks at module scope)
+const mediaRecorderRef = { current: null };
+const mediaStreamRef = { current: null };
+const audioChunksRef = { current: [] };
+const chosenMimeTypeRef = { current: null };
+const audioFileInputRef = { current: null };
 
 const canUseMediaRecorder = () => {
   try {
