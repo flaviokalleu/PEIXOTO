@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext, useRef } from "react";
 import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import "emoji-mart/css/emoji-mart.css";
 import { Picker } from "emoji-mart";
-import MicRecorder from "mic-recorder-to-mp3";
+// Replaced mic-recorder-to-mp3 with native MediaRecorder for robustness
 import clsx from "clsx";
 import { isNil } from "lodash";
 import { Reply } from "@material-ui/icons";
@@ -40,7 +40,16 @@ import LinearWithValueLabel from "./ProgressBarCustom";
 
 import useQuickMessages from "../../hooks/useQuickMessages";
 
-const Mp3Recorder = new MicRecorder({ bitRate: 128 });
+// MediaRecorder state
+const mediaRecorderRef = React.useRef(null);
+const mediaStreamRef = React.useRef(null);
+const audioChunksRef = React.useRef([]);
+const chosenMimeTypeRef = React.useRef(null);
+const audioFileInputRef = React.useRef(null);
+
+const canUseMediaRecorder = () => {
+  try { return typeof window !== 'undefined' && !!window.MediaRecorder; } catch { return false; }
+};
 
 const useStyles = makeStyles((theme) => ({
   mainWrapper: {
@@ -793,8 +802,49 @@ const handleSendMessage = async () => {
   const handleStartRecording = async () => {
     setLoading(true);
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
-      await Mp3Recorder.start();
+      if (!canUseMediaRecorder()) {
+        setLoading(false);
+        if (audioFileInputRef.current) audioFileInputRef.current.click();
+        return;
+      }
+      const constraints = {
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          channelCount: 1,
+          sampleRate: 48000,
+        },
+      };
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      mediaStreamRef.current = stream;
+
+      const preferredTypes = [
+        "audio/ogg;codecs=opus",
+        "audio/webm;codecs=opus",
+        "audio/mp4",
+        "audio/webm",
+      ];
+      let selectedType = "";
+      for (const t of preferredTypes) {
+        if (window.MediaRecorder && MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported(t)) {
+          selectedType = t;
+          break;
+        }
+      }
+      chosenMimeTypeRef.current = selectedType || undefined;
+
+      audioChunksRef.current = [];
+      const mr = new MediaRecorder(stream, {
+        mimeType: chosenMimeTypeRef.current,
+        audioBitsPerSecond: 32000,
+      });
+      mr.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+      };
+      mr.onerror = () => {};
+      mr.start(250);
+      mediaRecorderRef.current = mr;
       setRecording(true);
       setLoading(false);
     } catch (err) {
@@ -803,26 +853,54 @@ const handleSendMessage = async () => {
     }
   };
 
+  // network-resilient POST
+  const postWithRetry = async (url, formData, attempts = 3) => {
+    let lastErr;
+    for (let i = 0; i < attempts; i++) {
+      try {
+        await api.post(url, formData, { timeout: 60000, maxBodyLength: Infinity });
+        return;
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 500 * Math.pow(2, i)));
+      }
+    }
+    throw lastErr;
+  };
+
   const handleUploadAudio = async () => {
     setLoading(true);
     try {
-      const [, blob] = await Mp3Recorder.stop().getMp3();
-      if (blob.size < 10000) {
+      const mr = mediaRecorderRef.current;
+      if (!mr) throw new Error("Recorder not initialized");
+
+      const stopped = new Promise((resolve) => {
+        mr.onstop = resolve;
+      });
+      mr.stop();
+      await stopped;
+
+      const mime = chosenMimeTypeRef.current || (audioChunksRef.current[0] && audioChunksRef.current[0].type) || "audio/ogg";
+      const blob = new Blob(audioChunksRef.current, { type: mime });
+      audioChunksRef.current = [];
+      try { mediaStreamRef.current && mediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+
+      if (blob.size < 8000) {
         setLoading(false);
         setRecording(false);
         return;
       }
 
+      const ext = mime.includes("ogg") ? "ogg" : mime.includes("webm") ? "webm" : mime.includes("mp4") ? "m4a" : "ogg";
+      const filename = `audio-record-site-${new Date().getTime()}.${ext}`;
       const formData = new FormData();
-      /*const filename = `audio-${new Date().getTime()}.mp3`;*/
-      const filename = `audio-record-site-${new Date().getTime()}.mp3`;
       formData.append("medias", blob, filename);
       formData.append("body", filename);
       formData.append("fromMe", true);
 
       const messageRoute = getMessageRoute(ticketId, channelType);
       console.log("🎤 [MessageInputCustom] Enviando áudio via:", messageRoute);
-      await api.post(messageRoute, formData);
+      await postWithRetry(messageRoute, formData);
     } catch (err) {
       toastError(err);
     }
@@ -833,10 +911,33 @@ const handleSendMessage = async () => {
 
   const handleCancelAudio = async () => {
     try {
-      await Mp3Recorder.stop().getMp3();
-      setRecording(false);
+      const mr = mediaRecorderRef.current;
+      if (mr && mr.state !== "inactive") {
+        mr.stop();
+      }
+    } catch {}
+    try { mediaStreamRef.current && mediaStreamRef.current.getTracks().forEach(t => t.stop()); } catch {}
+    audioChunksRef.current = [];
+    setRecording(false);
+  };
+
+  const handleAudioFileSelected = async (e) => {
+    try {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = "";
+      if (!file) return;
+      setLoading(true);
+      const formData = new FormData();
+      const filename = file.name || `audio-record-${Date.now()}.m4a`;
+      formData.append("medias", file, filename);
+      formData.append("body", filename);
+      formData.append("fromMe", true);
+      const messageRoute = getMessageRoute(ticketId, channelType);
+      await postWithRetry(messageRoute, formData);
     } catch (err) {
       toastError(err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -954,6 +1055,15 @@ const handleSendMessage = async () => {
             handleStartRecording={handleStartRecording}
             handleOpenModalForward={handleOpenModalForward}
             showSelectMessageCheckbox={showSelectMessageCheckbox}
+          />
+          {/* Hidden fallback input for old devices */}
+          <input
+            type="file"
+            ref={audioFileInputRef}
+            accept="audio/*"
+            capture
+            onChange={handleAudioFileSelected}
+            style={{ display: "none" }}
           />
         </div>
       </Paper>
