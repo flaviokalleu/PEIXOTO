@@ -102,7 +102,10 @@ export const addReaction = async (req: Request, res: Response): Promise<Response
     });*/
 
     const io = getIO();
-    io.to(message.ticketId.toString()).emit(`company-${companyId}-appMessage`, {
+    // Envie apenas para o usuário correto
+    const relatedTicket = await Ticket.findByPk(message.ticketId);
+    const userId = relatedTicket?.userId || "unknown";
+    io.to(`chatbox_${userId}_${message.ticketId}`).emit(`company-${companyId}-appMessage`, {
       action: "update",
       message
     });

@@ -14,6 +14,12 @@ import defaultLogoLight from "./assets/logo.png";
 import defaultLogoDark from "./assets/logo-black.png";
 import defaultLogoFavicon from "./assets/favicon.ico";
 import useSettings from "./hooks/useSettings";
+import tokenManager from "./utils/tokenManager"; // Importar o tokenManager
+import visibilityManager from "./utils/visibilityManager"; // Importar o visibilityManager
+import "./utils/pwaDebug"; // Importar debug PWA
+import PWANavigationHandler from "./components/PWANavigationHandler"; // Componente para navegação PWA
+import PWAInstallPrompt from "./components/PWAInstallPrompt"; // Componente para instalação PWA
+import "./utils/pwaDebug"; // Debug PWA para desenvolvimento
 
 const queryClient = new QueryClient();
 
@@ -200,6 +206,54 @@ const App = () => {
     fetchVersionData();
   }, []);
 
+  // Integração com visibilityManager para background
+  useEffect(() => {
+    const handleVisible = () => {
+      console.log('App became visible - syncing data');
+      // Aqui podemos adicionar lógica de sincronização quando o app volta a ficar visível
+    };
+
+    const handleHidden = () => {
+      console.log('App became hidden - enabling background mode');
+      // Aqui podemos salvar estado ou preparar para modo background
+    };
+
+    visibilityManager.on('visible', handleVisible);
+    visibilityManager.on('hidden', handleHidden);
+
+    return () => {
+      visibilityManager.off('visible', handleVisible);
+      visibilityManager.off('hidden', handleHidden);
+    };
+  }, []);
+
+  // PWA Installation prompt
+  useEffect(() => {
+    let deferredPrompt;
+
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      console.log('PWA: Install prompt available');
+      
+      // Mostrar banner ou botão de instalação
+      window.dispatchEvent(new CustomEvent('pwa-install-available', { detail: deferredPrompt }));
+    };
+
+    const handleAppInstalled = () => {
+      console.log('PWA: App was installed');
+      deferredPrompt = null;
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+    };
+  }, []);
+
   return (
     <>
       <Favicon url={appLogoFavicon ? getBackendUrl() + "/public/" + appLogoFavicon : defaultLogoFavicon} />
@@ -207,6 +261,8 @@ const App = () => {
         <ThemeProvider theme={theme}>
           <QueryClientProvider client={queryClient}>
             <ActiveMenuProvider>
+              <PWANavigationHandler />
+              <PWAInstallPrompt />
               <Routes />
             </ActiveMenuProvider>
           </QueryClientProvider>

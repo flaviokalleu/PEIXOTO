@@ -16,21 +16,62 @@ class SocketWorker {
   }
 
   configureSocket() {
+    // Buscar token dos cookies em vez do localStorage
+    const getTokenFromCookies = () => {
+      console.log('SocketWorker: Raw document.cookie:', document.cookie);
+      const cookies = document.cookie.split(';');
+      console.log('SocketWorker: Parsed cookies array:', cookies);
+      
+      for (let cookie of cookies) {
+        const [name, value] = cookie.trim().split('=');
+        console.log(`SocketWorker: Checking cookie - ${name}: ${value}`);
+        if (name === 'token' || name === 'authToken' || name === 'public-token') {
+          console.log(`SocketWorker: Found token in cookie ${name}:`, value);
+          return value;
+        }
+      }
+      
+      // Fallback para localStorage (compatibilidade)
+      const localToken = localStorage.getItem('token') || localStorage.getItem('public-token');
+      console.log('SocketWorker: Fallback localStorage token:', localToken ? 'FOUND' : 'NOT FOUND');
+      return localToken;
+    };
+
+    const token = getTokenFromCookies();
+    console.log('SocketWorker: Final token for socket connection:', token ? 'FOUND' : 'NOT FOUND');
+    console.log('SocketWorker: Connecting with token from cookies:', !!token);
+
     this.socket = io(`${process.env.REACT_APP_BACKEND_URL}/${this?.companyId}` , {
       autoConnect: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionAttempts: Infinity,
-      query: { userId: this.userId }
+      query: { 
+        userId: this.userId,
+        token: token // Adicionar token na query
+      },
+      auth: {
+        token: token // Adicionar token na auth também
+      },
+      withCredentials: true, // Importante para enviar cookies
+      transports: ['websocket', 'polling'] // Garantir compatibilidade
     });
 
     this.socket.on("connect", () => {
-      console.log("Conectado ao servidor Socket.IO");
+      console.log("SocketWorker: Conectado ao servidor Socket.IO", {
+        companyId: this.companyId,
+        userId: this.userId,
+        socketId: this.socket.id
+      });
     });
 
     this.socket.on("disconnect", () => {
-      console.log("Desconectado do servidor Socket.IO");
+      console.log("SocketWorker: Desconectado do servidor Socket.IO");
       this.reconnectAfterDelay();
+    });
+
+    this.socket.on("connect_error", (error) => {
+      console.error("SocketWorker: Erro de conexão:", error);
     });
   }
 
