@@ -28,9 +28,14 @@ class Prompt extends Model<Prompt> {
   @Column
   prompt: string;
 
-  @AllowNull(false)
+  // Allow null so invalid/expired keys can be deactivated without deleting record
+  @AllowNull(true)
   @Column
   apiKey: string;
+
+  // Flag to disable a key without nulling (optional fallback)
+  @Column({ defaultValue: true })
+  isActive: boolean;
 
   @Column({ defaultValue: 10 })
   maxMessages: number;
