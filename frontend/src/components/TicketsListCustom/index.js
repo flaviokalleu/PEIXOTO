@@ -268,34 +268,9 @@ const TicketsListCustom = (props) => {
     }, [tickets]);
 
     useEffect(() => {
-        console.log('[TICKETS_LIST] useEffect triggered', { 
-            socket: !!socket, 
-            socketId: socket?.id,
-            companyId,
-            status, 
-            user: user?.id 
-        });
-
-        if (!socket) {
-            console.warn('[TICKETS_LIST] No socket available');
-            return;
-        }
-
         const shouldUpdateTicket = ticket => {
-            const result = (!ticket?.userId || ticket?.userId === user?.id || showAll) &&
-                ((!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.indexOf(ticket?.queueId) > -1);
-            
-            console.log('[TICKETS_LIST] shouldUpdateTicket debug:', {
-                ticketUserId: ticket?.userId,
-                currentUserId: user?.id,
-                showAll,
-                ticketQueueId: ticket?.queueId,
-                showTicketWithoutQueue,
-                selectedQueueIds,
-                result
-            });
-            
-            return result;
+            return (!ticket?.userId || ticket?.userId === user?.id || showAll) &&
+                ((!ticket?.queueId && showTicketWithoutQueue) || selectedQueueIds.indexOf(ticket?.queueId) > -1)
             // (!blockNonDefaultConnections || (ticket.status == 'group' && ignoreUserConnectionForGroups) || !user?.whatsappId || ticket.whatsappId == user?.whatsappId);
         }
         // const shouldUpdateTicketUser = (ticket) =>
@@ -348,33 +323,14 @@ const TicketsListCustom = (props) => {
         };
 
         const onCompanyAppMessageTicketsList = (data) => {
-            console.log('[TICKETS_LIST] onCompanyAppMessageTicketsList received:', data);
-            console.log('[TICKETS_LIST] shouldUpdateTicket result:', shouldUpdateTicket(data.ticket));
-            console.log('[TICKETS_LIST] ticket status:', data.ticket?.status, 'current status:', status);
-            
             if (data.action === "create" &&
                 shouldUpdateTicket(data.ticket) && data.ticket.status === status) {
-                console.log('[TICKETS_LIST] Updating ticket unread messages');
                 dispatch({
                     type: "UPDATE_TICKET_UNREAD_MESSAGES",
                     payload: data.ticket,
                     status: status,
                     sortDir: sortTickets
                 });
-            } else {
-                console.log('[TICKETS_LIST] Message not processed - conditions not met');
-                console.log('[TICKETS_LIST] Fallback: trying to update anyway if action is create');
-                
-                // Fallback: se é uma mensagem nova, tentar atualizar mesmo assim
-                if (data.action === "create") {
-                    console.log('[TICKETS_LIST] Forcing ticket update for new message');
-                    dispatch({
-                        type: "UPDATE_TICKET_UNREAD_MESSAGES",
-                        payload: data.ticket,
-                        status: status,
-                        sortDir: sortTickets
-                    });
-                }
             }
             // else if (data.action === "create" && shouldUpdateTicketUser(data.ticket) && data.ticket.status === status) {
             //     dispatch({
@@ -396,48 +352,19 @@ const TicketsListCustom = (props) => {
         };
 
         const onConnectTicketsList = () => {
-            console.log('[TICKETS_LIST] Socket connected, joining rooms...');
             if (status) {
                 socket.emit("joinTickets", status);
-                console.log('[TICKETS_LIST] Joined tickets room:', status);
             } else {
                 socket.emit("joinNotification");
-                console.log('[TICKETS_LIST] Joined notification room');
             }
         }
 
-        console.log('[TICKETS_LIST] Setting up socket listeners...');
         socket.on("connect", onConnectTicketsList)
         socket.on(`company-${companyId}-ticket`, onCompanyTicketTicketsList);
         socket.on(`company-${companyId}-appMessage`, onCompanyAppMessageTicketsList);
         socket.on(`company-${companyId}-contact`, onCompanyContactTicketsList);
-        
-        console.log('[TICKETS_LIST] Socket listeners configured for:', {
-            companyId,
-            ticketEvent: `company-${companyId}-ticket`,
-            messageEvent: `company-${companyId}-appMessage`,
-            contactEvent: `company-${companyId}-contact`,
-            socketConnected: socket.connected,
-            status
-        });
-
-        console.log('[TICKETS_LIST] Socket listeners configured:', {
-            listeners: [
-                "connect",
-                `company-${companyId}-ticket`,
-                `company-${companyId}-appMessage`, 
-                `company-${companyId}-contact`
-            ]
-        });
-
-        // Trigger initial connection if already connected
-        if (socket.connected) {
-            console.log('[TICKETS_LIST] Socket already connected, triggering onConnect');
-            onConnectTicketsList();
-        }
 
         return () => {
-            console.log('[TICKETS_LIST] Cleaning up socket listeners...');
             if (status) {
                 socket.emit("leaveTickets", status);
             } else {
@@ -449,7 +376,7 @@ const TicketsListCustom = (props) => {
             socket.off(`company-${companyId}-contact`, onCompanyContactTicketsList);
         };
 
-    }, [status, showAll, user, selectedQueueIds, tags, users, profile, queues, sortTickets, showTicketWithoutQueue, socket, companyId]);
+    }, [status, showAll, user, selectedQueueIds, tags, users, profile, queues, sortTickets, showTicketWithoutQueue]);
 
     useEffect(() => {
         if (typeof updateCount === "function") {

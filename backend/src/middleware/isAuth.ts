@@ -7,6 +7,7 @@ import authConfig from "../config/auth";
 import { getIO } from "../libs/socket";
 import ShowUserService from "../services/UserServices/ShowUserService";
 import { updateUser } from "../helpers/updateUser";
+// import { moment} from "moment-timezone"
 
 interface TokenPayload {
   id: string;
@@ -17,53 +18,32 @@ interface TokenPayload {
   exp: number;
 }
 
-interface RefreshTokenPayload {
-  id: string;
-  tokenVersion: number;
-  companyId: number;
-}
-
 const isAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  // Primeiro tentar pegar o token do header Authorization (para compatibilidade)
   const authHeader = req.headers.authorization;
-  
-  // Se não tiver no header, tentar pegar do cookie
-  const refreshToken = req.cookies.jrt;
 
-  if (!authHeader && !refreshToken) {
+  if (!authHeader) {
     throw new AppError("ERR_SESSION_EXPIRED", 401);
   }
 
+  // const check = await verifyHelper();
+
+  // if (!check) {
+  //   throw new AppError("ERR_SYSTEM_INVALID", 401);
+  // }
+
+  const [, token] = authHeader.split(" ");
+
   try {
-    if (authHeader) {
-      // Usar token do header (modo antigo)
-      const [, token] = authHeader.split(" ");
-      const decoded = verify(token, authConfig.secret);
-      const { id, profile, companyId } = decoded as TokenPayload;
+    const decoded = verify(token, authConfig.secret);
+    const { id, profile, companyId } = decoded as TokenPayload;
 
-      updateUser(id, companyId);
+    updateUser(id, companyId);
 
-      req.user = {
-        id,
-        profile,
-        companyId
-      };
-    } else if (refreshToken) {
-      // Usar refresh token do cookie
-      const decoded = verify(refreshToken, authConfig.refreshSecret);
-      const { id, companyId } = decoded as RefreshTokenPayload;
-
-      // Verificar se o usuário existe e buscar o perfil
-      const user = await ShowUserService(id, companyId);
-      
-      updateUser(id, companyId);
-
-      req.user = {
-        id,
-        profile: user.profile,
-        companyId
-      };
-    }
+    req.user = {
+      id,
+      profile,
+      companyId
+    };
   } catch (err: any) {
     if (err.message === "ERR_SESSION_EXPIRED" && err.statusCode === 401) {
       throw new AppError(err.message, 401);

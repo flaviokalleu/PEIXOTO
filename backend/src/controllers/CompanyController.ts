@@ -1,5 +1,8 @@
+import { verify } from "jsonwebtoken";
+import authConfig from "../config/auth";
 import * as Yup from "yup";
 import { Request, Response } from "express";
+// import { getIO } from "../libs/socket";
 import AppError from "../errors/AppError";
 import Company from "../models/Company";
 
@@ -13,6 +16,15 @@ import FindAllCompaniesService from "../services/CompanyService/FindAllCompanies
 import ShowPlanCompanyService from "../services/CompanyService/ShowPlanCompanyService";
 import User from "../models/User";
 import ListCompaniesPlanService from "../services/CompanyService/ListCompaniesPlanService";
+
+interface TokenPayload {
+  id: string;
+  username: string;
+  profile: string;
+  companyId: number;
+  iat: number;
+  exp: number;
+}
 
 type IndexQuery = {
   searchParam: string;
@@ -41,7 +53,10 @@ type SchedulesData = {
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
-  const { id, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id, profile, companyId } = decoded as TokenPayload;
   const company = await Company.findByPk(companyId);
   const requestUser = await User.findByPk(id);
 
@@ -86,7 +101,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {
@@ -102,7 +120,10 @@ export const show = async (req: Request, res: Response): Promise<Response> => {
 
 export const list = async (req: Request, res: Response): Promise<Response> => {
 
-  const { id, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(id);
 
   if (requestUser.super === true) {
@@ -113,9 +134,9 @@ export const list = async (req: Request, res: Response): Promise<Response> => {
     let company = [];
 
     for (let i = 0; i < companies.length; i++) {
-      const compId = companies[i].id;
+      const id = companies[i].id;
 
-      if (compId === companyId) {
+      if (id === companyId) {
         company.push(companies[i])
         return res.status(200).json(company);
       }
@@ -143,7 +164,10 @@ export const update = async (
 
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {
@@ -165,7 +189,10 @@ export const updateSchedules = async (
   const { schedules }: SchedulesData = req.body;
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {
@@ -185,7 +212,10 @@ export const remove = async (
   res: Response
 ): Promise<Response> => {
   const { id } = req.params;
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {
@@ -200,7 +230,10 @@ export const remove = async (
 export const listPlan = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {
@@ -218,7 +251,11 @@ export const listPlan = async (req: Request, res: Response): Promise<Response> =
 export const indexPlan = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber } = req.query as IndexQuery;
 
-  const { id, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id, profile, companyId } = decoded as TokenPayload;
+  // const company = await Company.findByPk(companyId);
   const requestUser = await User.findByPk(id);
 
   if (requestUser.super === true) {

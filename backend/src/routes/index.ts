@@ -38,7 +38,6 @@ import apiContactRoutes from "./api/apiContactRoutes";
 import apiMessageRoutes from "./api/apiMessageRoutes";
 import companySettingsRoutes from "./companySettingsRoutes";
 import forgotPasswordRoutes from "./forgotPasswordRoutes";
-import heartbeatRoutes from "./heartbeatRoutes";
 
 import promptRoutes from "./promptRouter";
 import statisticsRoutes from "./statisticsRoutes";
@@ -88,7 +87,6 @@ routes.use(ticketTagRoutes);
 routes.use("/api", apiCompanyRoutes);
 routes.use("/api", apiContactRoutes);
 routes.use("/api", apiMessageRoutes);
-routes.use(heartbeatRoutes);
 
 routes.use(flowDefaultRoutes);
 routes.use(webHook);

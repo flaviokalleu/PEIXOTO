@@ -1,5 +1,8 @@
+import { verify } from "jsonwebtoken";
+import authConfig from "../config/auth";
 import * as Yup from "yup";
 import { Request, Response } from "express";
+// import { getIO } from "../libs/socket";
 import AppError from "../errors/AppError";
 import Plan from "../models/Plan";
 
@@ -11,6 +14,15 @@ import FindAllPlanService from "../services/PlanService/FindAllPlanService";
 import DeletePlanService from "../services/PlanService/DeletePlanService";
 import User from "../models/User";
 import Company from "../models/Company";
+
+interface TokenPayload {
+  id: string;
+  username: string;
+  profile: string;
+  companyId: number;
+  iat: number;
+  exp: number;
+}
 
 type IndexQuery = {
   searchParam: string;
@@ -60,7 +72,10 @@ type UpdatePlanData = {
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber, listPublic } = req.query as IndexQuery;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
   const company = await Company.findByPk(companyId);
   const PlanCompany = company.planId;
@@ -123,7 +138,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
   const company = await Company.findByPk(companyId);
   const PlanCompany = company.planId;
@@ -173,7 +191,10 @@ export const update = async (
     //   useOpenAi,
     //   useIntegrations
   } = planData;
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
   const company = await Company.findByPk(companyId);
   const PlanCompany = company.planId;
@@ -218,7 +239,10 @@ export const remove = async (
 ): Promise<Response> => {
   const { id } = req.params;
 
-  const { id: requestUserId, profile, companyId } = req.user;
+  const authHeader = req.headers.authorization;
+  const [, token] = authHeader.split(" ");
+  const decoded = verify(token, authConfig.secret);
+  const { id: requestUserId, profile, companyId } = decoded as TokenPayload;
   const requestUser = await User.findByPk(requestUserId);
 
   if (requestUser.super === true) {

@@ -17,14 +17,6 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   });
  
   SendRefreshToken(res, refreshToken);
-  
-  // Salvar o token principal também como cookie
-  res.cookie("token", token, {
-    httpOnly: false, // Permite acesso via JavaScript
-    secure: false, // Permite HTTP em desenvolvimento
-    sameSite: "lax",
-    maxAge: 24 * 60 * 60 * 1000 // 24 horas
-  });
 
   const io = getIO();
 
@@ -67,10 +59,15 @@ export const update = async (
 };
 
 export const me = async (req: Request, res: Response): Promise<Response> => {
-  return res.json({ 
-    id: req.user.id, 
-    profile: req.user.profile
-  });
+  const token: string = req.cookies.jrt;
+  const user = await FindUserFromToken(token);
+  const { id, profile, super: superAdmin } = user;
+
+  if (!token) {
+    throw new AppError("ERR_SESSION_EXPIRED", 401);
+  }
+
+  return res.json({ id, profile, super: superAdmin });
 };
 
 export const remove = async (
@@ -83,7 +80,6 @@ export const remove = async (
     await user.update({ online: false });
   }
   res.clearCookie("jrt");
-  res.clearCookie("token"); // Limpar também o token principal
 
   return res.send();
 };

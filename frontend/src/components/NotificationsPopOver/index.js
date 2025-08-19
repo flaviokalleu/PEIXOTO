@@ -3,6 +3,7 @@ import { useTheme } from "@material-ui/core/styles";
 
 import { useHistory } from "react-router-dom";
 import { format } from "date-fns";
+// import { SocketContext } from "../../context/Socket/SocketContext";
 
 import useSound from "use-sound";
 
@@ -116,22 +117,7 @@ const NotificationsPopOver = (volume) => {
 		if (!("Notification" in window)) {
 			console.log("This browser doesn't support notifications");
 		} else {
-			Notification.requestPermission().then(permission => {
-				if (permission === 'granted') {
-					console.log('Permissão de notificação concedida');
-				}
-			});
-		}
-
-		// Registrar o service worker para PWA
-		if ('serviceWorker' in navigator) {
-			navigator.serviceWorker.register('/service-worker.js')
-				.then(registration => {
-					console.log('Service Worker registrado:', registration);
-				})
-				.catch(error => {
-					console.error('Erro ao registrar Service Worker:', error);
-				});
+			Notification.requestPermission();
 		}
 	}, [play]);
 
@@ -248,73 +234,35 @@ const NotificationsPopOver = (volume) => {
 	const handleNotifications = data => {
 		const { message, contact, ticket } = data;
 
-		// Verificar se o usuário está online e com permissão de notificação
-		if (Notification.permission !== 'granted') {
-			return;
-		}
+		const options = {
+			body: `${message.body} - ${format(new Date(), "HH:mm")}`,
+			icon: contact.urlPicture,
+			tag: ticket.id,
+			renotify: true,
+		};
+		const notification = new Notification(
+			`${i18n.t("tickets.notification.message")} ${contact.name}`,
+			options
+		);
 
-		// Verificar se o service worker está disponível
-		if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
-			// Usar notificação do service worker (PWA)
-			navigator.serviceWorker.ready.then(registration => {
-				registration.showNotification(
-					`${i18n.t("tickets.notification.message")} ${contact.name}`,
-					{
-						body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-						icon: contact.urlPicture || '/icon-192x192.png',
-						badge: '/icon-144x144.png',
-						tag: `ticket-${ticket.id}`,
-						renotify: true,
-						vibrate: [200, 100, 200],
-						data: {
-							url: `/tickets/${ticket.uuid}`,
-							ticketId: ticket.id
-						},
-						actions: [
-							{
-								action: 'open',
-								title: 'Abrir Ticket'
-							}
-						],
-						requireInteraction: true,
-						silent: false
-					}
-				);
-			});
-		} else {
-			// Usar notificação normal do browser
-			const options = {
-				body: `${message.body} - ${format(new Date(), "HH:mm")}`,
-				icon: contact.urlPicture || '/icon-192x192.png',
-				tag: ticket.id,
-				renotify: true,
-				vibrate: [200, 100, 200]
-			};
-			
-			const notification = new Notification(
-				`${i18n.t("tickets.notification.message")} ${contact.name}`,
-				options
+		notification.onclick = e => {
+			e.preventDefault();
+			window.focus();
+			setTabOpen(ticket.status)
+			historyRef.current.push(`/tickets/${ticket.uuid}`);
+			// handleChangeTab(null, ticket.isGroup? "group" : "open");
+		};
+
+		setDesktopNotifications(prevState => {
+			const notfiticationIndex = prevState.findIndex(
+				n => n.tag === notification.tag
 			);
-
-			notification.onclick = e => {
-				e.preventDefault();
-				window.focus();
-				setTabOpen(ticket.status);
-				historyRef.current.push(`/tickets/${ticket.uuid}`);
-			};
-
-			setDesktopNotifications(prevState => {
-				const notfiticationIndex = prevState.findIndex(
-					n => n.tag === notification.tag
-				);
-				if (notfiticationIndex !== -1) {
-					prevState[notfiticationIndex] = notification;
-					return [...prevState];
-				}
-				return [notification, ...prevState];
-			});
-		}
-		
+			if (notfiticationIndex !== -1) {
+				prevState[notfiticationIndex] = notification;
+				return [...prevState];
+			}
+			return [notification, ...prevState];
+		});
 		soundAlertRef.current();
 	};
 

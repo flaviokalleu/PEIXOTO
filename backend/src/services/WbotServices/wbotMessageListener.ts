@@ -4686,15 +4686,13 @@ const filterMessages = (msg: WAMessage): boolean => {
   if (msg.message?.protocolMessage?.editedMessage) return true;
   if (msg.message?.protocolMessage) return false;
 
-  const stubType = msg.messageStubType;
   if (
-    stubType != null &&
     [
       WAMessageStubType.REVOKE,
       WAMessageStubType.E2E_DEVICE_CHANGED,
       WAMessageStubType.E2E_IDENTITY_CHANGED,
       WAMessageStubType.CIPHERTEXT
-    ].includes(stubType)
+    ].includes(msg.messageStubType as WAMessageStubType)
   )
     return false;
 

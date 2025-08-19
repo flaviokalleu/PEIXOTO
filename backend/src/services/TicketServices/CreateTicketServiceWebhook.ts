@@ -74,8 +74,7 @@ const CreateTicketServiceWebhook = async ({
 
   const io = getIO();
 
-  // Envie apenas para o usuário correto
-  io.to(`chatbox_${ticket.userId}_${ticket.id}`).emit("ticket", {
+  io.to(ticket.id.toString()).emit("ticket", {
     action: "update",
     ticket
   });

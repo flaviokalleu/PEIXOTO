@@ -25,23 +25,15 @@ interface RequestFlow {
 }
 
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
-const ensureDir = (dir: string) => {
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  } catch {}
-};
 
 const processAudio = async (audio: string): Promise<string> => {
-  // Convert to OGG/Opus mono com configurações para voice note nativo (com waveform)
-  ensureDir(publicFolder);
-  const outputAudio = `${publicFolder}/${new Date().getTime()}.ogg`;
+  const outputAudio = `${publicFolder}/${new Date().getTime()}.mp3`;
   return new Promise((resolve, reject) => {
     exec(
-      `${ffmpegPath.path} -i ${audio} -vn -ac 1 -ar 16000 -c:a libopus -b:a 32k -compression_level 10 -frame_duration 60 -application voip -f ogg ${outputAudio} -y`,
+      `${ffmpegPath.path} -i ${audio} -vn -ab 128k -ar 44100 -f ipod ${outputAudio} -y`,
       (error, _stdout, _stderr) => {
-        if (error) return reject(error);
+        if (error) reject(error);
+        //fs.unlinkSync(audio);
         resolve(outputAudio);
       }
     );
@@ -49,14 +41,13 @@ const processAudio = async (audio: string): Promise<string> => {
 };
 
 const processAudioFile = async (audio: string): Promise<string> => {
-  // Conversão específica para voice note com waveform
-  ensureDir(publicFolder);
-  const outputAudio = `${publicFolder}/${new Date().getTime()}.ogg`;
+  const outputAudio = `${publicFolder}/${new Date().getTime()}.mp3`;
   return new Promise((resolve, reject) => {
     exec(
-      `${ffmpegPath.path} -i ${audio} -vn -ac 1 -ar 16000 -c:a libopus -b:a 32k -compression_level 10 -frame_duration 60 -application voip -f ogg ${outputAudio} -y`,
+      `${ffmpegPath.path} -i ${audio} -vn -ar 44100 -ac 2 -b:a 192k ${outputAudio}`,
       (error, _stdout, _stderr) => {
-        if (error) return reject(error);
+        if (error) reject(error);
+        //fs.unlinkSync(audio);
         resolve(outputAudio);
       }
     );
@@ -112,21 +103,23 @@ const SendWhatsAppMediaFlow = async ({
         fileName: mediaName
         // gifPlayback: true
       };
-  } else if (typeMessage === "audio") {
-      // Sempre enviar áudio como voice note gravado na hora
-      const convert = await processAudio(pathMedia);
-      let seconds = 1;
-      try {
-        const bytes = fs.statSync(convert).size;
-        seconds = Math.max(1, Math.round(bytes / 4000)); // ~32kbps => 4000 bytes/s
-      } catch {}
-      options = {
-        audio: fs.readFileSync(convert),
-        // WhatsApp voice note format - sempre como gravação
-        mimetype: "audio/ogg; codecs=opus",
-        ptt: true,
-        seconds
-      };
+    } else if (typeMessage === "audio") {
+      console.log('record', isRecord)
+      if (isRecord) {
+        const convert = await processAudio(pathMedia);
+        options = {
+          audio: fs.readFileSync(convert),
+          mimetype: typeMessage ? "audio/mp4" : mimetype,
+          ptt: true
+        };
+      } else {
+        const convert = await processAudioFile(pathMedia);
+        options = {
+          audio: fs.readFileSync(convert),
+          mimetype: typeMessage ? "audio/mp4" : mimetype,
+          ptt: false
+        };
+      }
     } else if (typeMessage === "document" || typeMessage === "text") {
       options = {
         document: fs.readFileSync(pathMedia),

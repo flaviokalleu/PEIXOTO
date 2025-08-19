@@ -36,54 +36,32 @@ const os = require("os");
 
 const publicFolder = path.resolve(__dirname, "..", "..", "..", "public");
 
-const ensureDir = (dir: string) => {
-  try {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-  } catch {}
-};
-
-// Prefer Opus (OGG) para WhatsApp voice notes com waveform
-const processAudioOpus = async (audio: string, companyId: string): Promise<string> => {
-  const companyDir = `${publicFolder}/company${companyId}`;
-  ensureDir(companyDir);
-  const outputAudio = `${companyDir}/${new Date().getTime()}.ogg`;
+const processAudio = async (audio: string, companyId: string): Promise<string> => {
+  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.mp3`;
+  
   return new Promise((resolve, reject) => {
-    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 16000 -ac 1 -c:a libopus -b:a 32k -compression_level 10 -frame_duration 60 -application voip "${outputAudio}"`;
-    exec(cmd, (error, _stdout, _stderr) => {
-      if (error) return reject(error);
-      resolve(outputAudio);
-    });
-  });
-};
-
-// MP3 fallback com configurações para voice note
-const processAudioMp3 = async (audio: string, companyId: string): Promise<string> => {
-  const companyDir = `${publicFolder}/company${companyId}`;
-  ensureDir(companyDir);
-  const outputAudio = `${companyDir}/${new Date().getTime()}.mp3`;
-  return new Promise((resolve, reject) => {
-    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 16000 -ac 1 -c:a libmp3lame -b:a 32k "${outputAudio}"`;
-    exec(cmd, (error, _stdout, _stderr) => {
-      if (error) return reject(error);
-      resolve(outputAudio);
-    });
+    exec(
+      `${ffmpegPath.path} -i ${audio} -af "afftdn=nr=5:nf=-40, highpass=f=100, lowpass=f=4000, dynaudnorm=f=1000, aresample=44100, volume=1.0" -vn -ar 44100 -ac 2 -b:a 256k ${outputAudio} -y`,
+      (error, _stdout, _stderr) => {
+        if (error) reject(error);
+        resolve(outputAudio);
+      }
+    );
   });
 };
 
 
 const processAudioFile = async (audio: string, companyId: string): Promise<string> => {
-  // keep MP3 for generic conversion usages
-  const companyDir = `${publicFolder}/company${companyId}`;
-  ensureDir(companyDir);
-  const outputAudio = `${companyDir}/${new Date().getTime()}.mp3`;
+  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.mp3`;
   return new Promise((resolve, reject) => {
-    const cmd = `${ffmpegPath.path} -y -i "${audio}" -vn -af "afftdn=nr=8:nf=-35,highpass=f=120,lowpass=f=3800,dynaudnorm=f=250" -ar 24000 -ac 1 -c:a libmp3lame -b:a 96k "${outputAudio}"`;
-    exec(cmd, (error, _stdout, _stderr) => {
-      if (error) return reject(error);
-      resolve(outputAudio);
-    });
+    exec(
+      `${ffmpegPath.path} -i ${audio} -af "afftdn=nr=5:nf=-40, highpass=f=100, lowpass=f=4000, dynaudnorm=f=1000, aresample=44100, volume=1.0" -vn -ar 44100 -ac 2 -b:a 256k ${outputAudio} -y`,
+      (error, _stdout, _stderr) => {
+        if (error) reject(error);
+        // fs.unlinkSync(audio);
+        resolve(outputAudio);
+      }
+    );
   });
 };
 
@@ -110,35 +88,20 @@ export const getMessageOptions = async (
         // gifPlayback: true
       };
     } else if (typeMessage === "audio") {
-      // Sempre enviar áudio como voice note gravado na hora
-      try {
-        const convertOgg = await processAudioOpus(pathMedia, companyId);
-        let seconds = 1; try { const bytes = fs.statSync(convertOgg).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
+      const typeAudio = true; //fileName.includes("audio-record-site");
+      const convert = await processAudio(pathMedia, companyId);
+      if (typeAudio) {
         options = {
-          audio: fs.readFileSync(convertOgg),
-          mimetype: "audio/ogg; codecs=opus",
-          ptt: true,
-          seconds
+          audio: fs.readFileSync(convert),
+          mimetype: "audio/mp4",
+          ptt: true
         };
-        try { unlinkSync(convertOgg); } catch {}
-      } catch (_e1) {
-        try {
-          const convertMp3 = await processAudioMp3(pathMedia, companyId);
-          let seconds = 1; try { const bytes = fs.statSync(convertMp3).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
-          options = {
-            audio: fs.readFileSync(convertMp3),
-            mimetype: "audio/mpeg",
-            ptt: true,
-            seconds
-          };
-          try { unlinkSync(convertMp3); } catch {}
-        } catch (_e2) {
-          options = {
-            audio: fs.readFileSync(pathMedia),
-            mimetype: mimeType || "audio/mpeg",
-            ptt: true
-          };
-        }
+      } else {
+        options = {
+          audio: fs.readFileSync(convert),
+          mimetype: typeAudio ? "audio/mp4" : mimeType,
+          ptt: true
+        };
       }
     } else if (typeMessage === "document") {
       options = {
@@ -196,35 +159,27 @@ const SendWhatsAppMedia = async ({
       };
       bodyTicket = "🎥 Arquivo de vídeo"
     } else if (typeMessage === "audio") {
-      // Sempre enviar áudio como voice note gravado na hora
-      try {
-        const convertOgg = await processAudioOpus(media.path, companyId);
-        let seconds = 1; try { const bytes = fs.statSync(convertOgg).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
+      
+      const typeAudio = true; //media.originalname.includes("audio-record-site");
+      if (typeAudio) {
+        const convert = await processAudio(media.path, companyId);
         options = {
-          audio: fs.readFileSync(convertOgg),
-          mimetype: "audio/ogg; codecs=opus",
+          audio: fs.readFileSync(convert),
+          mimetype: "audio/mpeg",
           ptt: true,
-          seconds
+          caption: bodyMedia,
+          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
         };
-        try { unlinkSync(convertOgg); } catch {}
-      } catch (_e1) {
-        try {
-          const convertMp3 = await processAudioMp3(media.path, companyId);
-          let seconds = 1; try { const bytes = fs.statSync(convertMp3).size; seconds = Math.max(1, Math.round(bytes / 4000)); } catch {}
-          options = {
-            audio: fs.readFileSync(convertMp3),
-            mimetype: "audio/mpeg",
-            ptt: true,
-            seconds
-          };
-          try { unlinkSync(convertMp3); } catch {}
-        } catch (_e2) {
-          options = {
-            audio: fs.readFileSync(media.path),
-            mimetype: media.mimetype || "audio/mpeg",
-            ptt: true
-          };
-        }
+        unlinkSync(convert);
+      } else {
+        const convert = await processAudio(media.path, companyId);
+        options = {
+          audio: fs.readFileSync(convert),
+          mimetype: "audio/mpeg",
+          ptt: true,
+          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+        };
+        unlinkSync(convert);
       }
       bodyTicket = "🎵 Arquivo de áudio"
     } else if (typeMessage === "document" || typeMessage === "text") {

@@ -505,8 +505,9 @@ export const ActionsWebhookService = async (
             await SendWhatsAppMediaFlow({
               media: mediaDirectory,
               ticket: ticketInt,
-              // Sempre enviar áudio como gravação (voice note)
-              isRecord: true
+              isRecord: nodeSelected.data.elements.filter(
+                item => item.number === elementNowSelected
+              )[0].record
             });
             
             await intervalWhats("1");
