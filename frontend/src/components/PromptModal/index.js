@@ -52,12 +52,9 @@ const useStyles = makeStyles(theme => ({
 }));
 
 const allowedModels = [
+  "GROQ", // Sistema inteligente de rotação automática de modelos Groq
   "gpt-3.5-turbo-1106",
   "gpt-4o",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro",
 ];
 
 const PromptSchema = Yup.object().shape({
@@ -98,7 +95,7 @@ const PromptModal = ({ open, onClose, promptId }) => {
   const initialState = {
     name: "",
     prompt: "",
-    model: "gpt-3.5-turbo-1106",
+    model: "GROQ",
     maxTokens: 100,
     temperature: 1,
     apiKey: "",
@@ -252,12 +249,9 @@ const PromptModal = ({ open, onClose, promptId }) => {
                     >
                       {allowedModels.map(model => (
                         <MenuItem key={model} value={model}>
-                          {model === "gpt-3.5-turbo-1106" && "GPT 3.5 Turbo"}
-                          {model === "gpt-4o" && "GPT 4o"}
-                          {model === "gemini-1.5-flash" && "Gemini 1.5 Flash"}
-                          {model === "gemini-1.5-pro" && "Gemini 1.5 Pro"}
-                          {model === "gemini-2.0-flash" && "Gemini 2.0 Flash"}
-                          {model === "gemini-2.0-pro" && "Gemini 2.0 Pro"}
+                          {model === "GROQ" && "🤖 GROQ AI (Rotação Inteligente de Modelos)"}
+                          {model === "gpt-3.5-turbo-1106" && "🧠 GPT 3.5 Turbo"}
+                          {model === "gpt-4o" && "🚀 GPT 4o"}
                         </MenuItem>
                       ))}
                     </Field>

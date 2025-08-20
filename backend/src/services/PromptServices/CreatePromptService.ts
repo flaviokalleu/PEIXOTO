@@ -45,7 +45,7 @@ const CreatePromptService = async (promptData: PromptData): Promise<Prompt> => {
         voice: promptData.voice || "pt-BR",
         voiceKey: promptData.voiceKey || "",
         voiceRegion: promptData.voiceRegion || "brazil",
-        model: promptData.model || "gpt-3.5-turbo-1106"
+        model: promptData.model || "GROQ"
     };
 
     let promptTable = await Prompt.create(promptDataWithDefaults);

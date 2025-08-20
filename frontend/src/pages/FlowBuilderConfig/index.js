@@ -540,7 +540,7 @@ export const FlowBuilderConfig = () => {
     },
     {
       icon: <BrainCircuit color="#F7953B" size={20} />,
-      name: "OpenAI/GEMINI(GOOGLE)",
+      name: "GROQ AI",
       type: "openai",
     },
     {

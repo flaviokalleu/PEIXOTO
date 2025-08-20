@@ -1,9 +1,9 @@
 import Prompt from "../models/Prompt";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { createGroq } from "@ai-sdk/groq";
 import OpenAI from "openai";
 
 interface ApiKeyHealth {
-  provider: 'openai' | 'gemini';
+  provider: 'openai' | 'groq';
   key: string;
   isValid: boolean;
   lastChecked: Date;
@@ -42,9 +42,9 @@ class ApiKeyMonitor {
         if (prompt.apiKey) {
           await this.checkApiKey(prompt.apiKey, 'openai', prompt.companyId, prompt.queueId);
           
-          // Check if it's also a Gemini key
-          if (prompt.apiKey.startsWith('AI') || prompt.apiKey.includes('google')) {
-            await this.checkApiKey(prompt.apiKey, 'gemini', prompt.companyId, prompt.queueId);
+          // Check if it's also a Groq key
+          if (prompt.apiKey.startsWith('gsk_') || prompt.model?.includes('groq')) {
+            await this.checkApiKey(prompt.apiKey, 'groq', prompt.companyId, prompt.queueId);
           }
         }
       }
@@ -55,7 +55,7 @@ class ApiKeyMonitor {
 
   async checkApiKey(
     apiKey: string, 
-    provider: 'openai' | 'gemini', 
+    provider: 'openai' | 'groq', 
     companyId?: number, 
     queueId?: number
   ): Promise<boolean> {
@@ -68,11 +68,20 @@ class ApiKeyMonitor {
         const openai = new OpenAI({ apiKey });
         await openai.models.list();
         isValid = true;
-      } else if (provider === 'gemini') {
-        const gemini = new GoogleGenerativeAI(apiKey);
-        const model = gemini.getGenerativeModel({ model: "gemini-1.5-flash" });
-        await model.generateContent("test");
-        isValid = true;
+      } else if (provider === 'groq') {
+        const groq = createGroq({ apiKey });
+        // Test Groq API with a simple request
+        try {
+          const { generateText } = await import('ai');
+          await generateText({
+            model: groq('llama-3.1-8b-instant'),
+            prompt: 'test'
+          });
+          isValid = true;
+        } catch (error) {
+          console.error('Groq test failed:', error);
+          isValid = false;
+        }
       }
 
       this.healthCache.set(cacheKey, {
@@ -135,12 +144,12 @@ class ApiKeyMonitor {
     }
   }
 
-  getKeyHealth(apiKey: string, provider: 'openai' | 'gemini'): ApiKeyHealth | null {
+  getKeyHealth(apiKey: string, provider: 'openai' | 'groq'): ApiKeyHealth | null {
     const cacheKey = `${provider}:${apiKey}`;
     return this.healthCache.get(cacheKey) || null;
   }
 
-  getAllHealthyKeys(provider: 'openai' | 'gemini'): ApiKeyHealth[] {
+  getAllHealthyKeys(provider: 'openai' | 'groq'): ApiKeyHealth[] {
     return Array.from(this.healthCache.values())
       .filter(health => health.provider === provider && health.isValid);
   }
@@ -151,7 +160,7 @@ class ApiKeyMonitor {
       valid: 0,
       invalid: 0,
       openai: { total: 0, valid: 0 },
-      gemini: { total: 0, valid: 0 }
+      groq: { total: 0, valid: 0 }
     };
 
     for (const health of this.healthCache.values()) {

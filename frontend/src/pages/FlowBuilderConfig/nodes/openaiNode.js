@@ -92,7 +92,7 @@ export default memo(({ data, isConnectable, id }) => {
             color: "#3aba38"
           }}
         />
-        <div style={{ color: "#232323", fontSize: "16px" }}>OpenAI/Gemini</div>
+        <div style={{ color: "#232323", fontSize: "16px" }}>Groq AI</div>
       </div>
       <div style={{ color: "#232323", fontSize: "12px", width: 180 }}>
         <div
@@ -103,7 +103,7 @@ export default memo(({ data, isConnectable, id }) => {
           }}
         >
           <div style={{ gap: "5px", padding: "6px" }}>
-            <div style={{ textAlign: "center" }}>OpenAI/Gemini</div>
+            <div style={{ textAlign: "center" }}>Groq AI</div>
           </div>
         </div>
       </div>

@@ -14,14 +14,11 @@ import { Visibility, VisibilityOff } from "@material-ui/icons";
 import { InputAdornment, IconButton } from "@material-ui/core";
 import { i18n } from "../../translate/i18n";
 
-// Lista de modelos suportados, alinhada com o backend
+// Lista de modelos suportados, organizados por provider
 const allowedModels = [
+  "GROQ", // Sistema inteligente de rotação automática de modelos Groq
   "gpt-3.5-turbo-1106",
   "gpt-4o",
-  "gemini-1.5-flash",
-  "gemini-1.5-pro",
-  "gemini-2.0-flash",
-  "gemini-2.0-pro",
 ];
 
 const useStyles = makeStyles((theme) => ({
@@ -86,7 +83,7 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
   const initialState = {
     name: "",
     prompt: "",
-    model: "gpt-3.5-turbo-1106",
+    model: "GROQ",
     maxTokens: 100,
     temperature: 1,
     apiKey: "",
@@ -96,14 +93,14 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [integration, setIntegration] = useState(initialState);
   const [labels, setLabels] = useState({
-    title: "Adicionar OpenAI/Gemini ao fluxo",
+    title: "Adicionar Groq AI ao fluxo",
     btn: "Adicionar",
   });
 
   useEffect(() => {
     if (open === "edit") {
       setLabels({
-        title: "Editar OpenAI/Gemini do fluxo",
+        title: "Editar Groq AI do fluxo",
         btn: "Salvar",
       });
       const typebotIntegration = data?.data?.typebotIntegration || {};
@@ -112,11 +109,11 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
         ...typebotIntegration,
         model: allowedModels.includes(typebotIntegration.model)
           ? typebotIntegration.model
-          : "gpt-3.5-turbo-1106",
+          : "GROQ",
       });
     } else if (open === "create") {
       setLabels({
-        title: "Adicionar OpenAI/Gemini ao fluxo",
+        title: "Adicionar Groq AI ao fluxo",
         btn: "Adicionar",
       });
       setIntegration(initialState);
@@ -230,12 +227,9 @@ const FlowBuilderOpenAIModal = ({ open, onSave, data, onUpdate, close }) => {
                     >
                       {allowedModels.map((model) => (
                         <MenuItem key={model} value={model}>
-                          {model === "gpt-3.5-turbo-1106" && "GPT 3.5 Turbo"}
-                          {model === "gpt-4o" && "GPT 4o"}
-                          {model === "gemini-1.5-flash" && "Gemini 1.5 Flash"}
-                          {model === "gemini-1.5-pro" && "Gemini 1.5 Pro"}
-                          {model === "gemini-2.0-flash" && "Gemini 2.0 Flash"}
-                          {model === "gemini-2.0-pro" && "Gemini 2.0 Pro"}
+                          {model === "GROQ" && "🤖 GROQ AI (Rotação Inteligente de Modelos)"}
+                          {model === "gpt-3.5-turbo-1106" && "🧠 GPT 3.5 Turbo"}
+                          {model === "gpt-4o" && "🚀 GPT 4o"}
                         </MenuItem>
                       ))}
                     </Field>

@@ -19,6 +19,7 @@
   "license": "MIT",
   "dependencies": {
     "@adiwajshing/keyed-db": "^0.2.4",
+    "@ai-sdk/groq": "^2.0.11",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
     "@google-cloud/dialogflow": "^5.9.0",
     "@google/generative-ai": "^0.24.1",
@@ -28,6 +29,7 @@
     "@supabase/supabase-js": "^2.33.2",
     "@types/fs-extra": "^11.0.4",
     "@whiskeysockets/baileys": "github:zennn08/Baileys#profile-picture-url",
+    "ai": "^5.0.19",
     "async-mutex": "^0.5.0",
     "axios": "^1.11.0",
     "basic-auth": "^2.0.1",
@@ -53,6 +55,7 @@
     "fluent-ffmpeg": "^2.1.2",
     "gn-api-sdk-typescript": "^2.0.1",
     "googleapis": "^113.0.0",
+    "groq-sdk": "^0.30.0",
     "helmet": "^7.1.0",
     "http-graceful-shutdown": "^3.1.6",
     "jimp": "^0.16.1",

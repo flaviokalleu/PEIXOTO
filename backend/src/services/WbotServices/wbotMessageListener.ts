@@ -3975,11 +3975,24 @@ const handleMessage = async (
     ) {
       const { prompt } = whatsapp;
       console.log(`🔍 OpenAI na conexão - Ticket ID: ${ticket.id}, Prompt ID: ${whatsapp.promptId}, Queue ID: ${ticket.queueId}`);
-      // Garante que o campo model está presente no prompt, usando "gpt-3.5-turbo" como padrão
+      console.log(`🔑 API Key Source: prompt.apiKey = ${prompt?.apiKey || 'UNDEFINED'}`);
+      console.log(`📝 Prompt Data: id=${prompt?.id}, model=${prompt?.model}, queueId=${prompt?.queueId}`);
+      
+      // PROBLEMA IDENTIFICADO: o spread operator não está copiando corretamente a apiKey
       const openAiSettings = {
-        ...prompt,
-        model: (prompt as any)?.model || "gpt-3.5-turbo"
+        name: prompt?.name,
+        prompt: prompt?.prompt,
+        voice: prompt?.voice,
+        voiceKey: prompt?.voiceKey,
+        voiceRegion: prompt?.voiceRegion,
+        maxTokens: prompt?.maxTokens || 500,
+        temperature: prompt?.temperature || 1,
+        apiKey: prompt?.apiKey, // Cópia explícita
+        queueId: prompt?.queueId,
+        maxMessages: prompt?.maxMessages || 10,
+        model: prompt?.model || "gpt-3.5-turbo"
       };
+      console.log(`⚙️ Settings: apiKey=${openAiSettings.apiKey}, model=${openAiSettings.model}, queueId=${openAiSettings.queueId}`);
       await handleOpenAi(
         openAiSettings,
         msg,
