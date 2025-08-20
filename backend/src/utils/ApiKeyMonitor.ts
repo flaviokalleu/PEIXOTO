@@ -1,6 +1,7 @@
 import Prompt from "../models/Prompt";
 import { createGroq } from "@ai-sdk/groq";
 import OpenAI from "openai";
+import Groq from "groq-sdk";
 
 interface ApiKeyHealth {
   provider: 'openai' | 'groq';

@@ -23,7 +23,7 @@ const ListService = async ({ queueId, queueOptionId, parentId }: QueueOptionFilt
     whereOptions.parentId = null;
   }
 
-  if (parentId > 0) {
+  if (Number(parentId) > 0) {
     whereOptions.parentId = parentId;
   }
 

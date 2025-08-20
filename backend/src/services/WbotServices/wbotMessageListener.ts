@@ -70,6 +70,7 @@ import ShowFileService from "../FileServices/ShowService";
 import Company from "../../models/Company";
 
 import OpenAI from "openai";
+import Groq from "groq-sdk";
 import ffmpeg from "fluent-ffmpeg";
 import {
   SpeechConfig,

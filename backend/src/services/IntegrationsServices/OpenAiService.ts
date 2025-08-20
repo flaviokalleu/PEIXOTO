@@ -11,6 +11,7 @@ import { isNil, isNull } from "lodash";
 import fs from "fs";
 import path from "path";
 import OpenAI from "openai";
+import Groq from "groq-sdk";
 import { groq } from '@ai-sdk/groq';
 import { generateText } from 'ai';
 import { createGroq } from '@ai-sdk/groq';

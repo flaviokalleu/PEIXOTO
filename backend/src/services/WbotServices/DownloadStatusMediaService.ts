@@ -58,7 +58,7 @@ const DownloadStatusMediaService = async ({
           }
 
           const filePath = path.join(publicFolder, filename);
-          await writeFileAsync(filePath, stream);
+          fs.writeFileSync(filePath, new Uint8Array(stream as Buffer));
           
           mediaUrl = `${process.env.BACKEND_URL}/public/company${companyId}/${filename}`;
           mediaThumbnail = mediaUrl; // Para imagens, thumbnail é a mesma URL
@@ -95,7 +95,7 @@ const DownloadStatusMediaService = async ({
           }
 
           const filePath = path.join(publicFolder, filename);
-          await writeFileAsync(filePath, stream);
+          fs.writeFileSync(filePath, new Uint8Array(stream as Buffer));
           
           mediaUrl = `${process.env.BACKEND_URL}/public/company${companyId}/${filename}`;
           
@@ -103,7 +103,7 @@ const DownloadStatusMediaService = async ({
           if (quotedMessage.videoMessage.jpegThumbnail) {
             const thumbFilename = `thumb_${Date.now()}_${Math.random().toString(36).substr(2, 9)}.jpg`;
             const thumbPath = path.join(publicFolder, thumbFilename);
-            await writeFileAsync(thumbPath, quotedMessage.videoMessage.jpegThumbnail);
+            fs.writeFileSync(thumbPath, new Uint8Array(quotedMessage.videoMessage.jpegThumbnail));
             mediaThumbnail = `${process.env.BACKEND_URL}/public/company${companyId}/${thumbFilename}`;
           }
         }
