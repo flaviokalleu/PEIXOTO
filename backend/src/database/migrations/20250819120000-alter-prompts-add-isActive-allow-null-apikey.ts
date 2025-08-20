@@ -8,6 +8,7 @@ module.exports = {
         type: DataTypes.TEXT,
         allowNull: true
       });
+      console.log("✅ Updated Prompts.apiKey to allow null");
     } catch (err) {
       console.error("Failed to alter Prompts.apiKey to allow null:", err);
     }
@@ -21,6 +22,9 @@ module.exports = {
           allowNull: false,
           defaultValue: true
         });
+        console.log("✅ Added Prompts.isActive column");
+      } else {
+        console.log("⚠️ Prompts.isActive column already exists, skipping");
       }
     } catch (err) {
       console.error("Failed to add Prompts.isActive column:", err);
