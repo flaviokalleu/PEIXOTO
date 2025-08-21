@@ -481,6 +481,22 @@ const processResponse = async (
   ticketTraking: TicketTraking
 ): Promise<void> => {
   let response = responseText;
+  // Sanitiza qualquer conteúdo de raciocínio como <think>...</think> antes de processar
+  try {
+    const stripReasoningBlocks = (txt: string) => {
+      let out = txt;
+  // Remove blocos <think> ... </think> e variações; também se não houver fechamento
+  out = out.replace(/<think[\s\S]*?(<\/think>|$)/gi, "");
+  // Remove blocos de outras tags comuns de raciocínio oculto
+  out = out.replace(/<(analysis|reasoning|scratchpad|inner[-_ ]?thoughts)[\s\S]*?(<\/(analysis|reasoning|scratchpad|inner[-_ ]?thoughts)>|$)/gi, "");
+      // Remove blocos markdown com titles comuns
+  out = out.replace(/```(?:thought|thinking|analysis|razonamiento|raciocinio|análise|cot|chain[- ]?of[- ]?thought)[\s\S]*?```/gi, "");
+      // Remove linhas que começam com padrões de raciocínio conhecidos
+  out = out.replace(/^(?:Thought|Thinking|Analysis|Reasoning|Raciocínio|Análise|CoT|Chain[- ]?of[- ]?thought)\s*:\s*[\s\S]*$/gim, "");
+      return out.trim();
+    };
+    response = stripReasoningBlocks(response);
+  } catch {}
 
   // Se a própria resposta da IA conter diretivas de mídia, baixar e enviar a(s) mídia(s) com o restante do texto como legenda
   try {
@@ -927,16 +943,17 @@ export const handleOpenAi = async (
 
   // Format system prompt
   const clientName = sanitizeName(contact.name || "Amigo(a)");
-  const promptSystem = `Instruções do Sistema:
+  const promptSystem = `Instruções do Sistema (responda somente em português do Brasil):
   - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido.
   - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
-  - Sempre que der, inclua o nome do cliente para tornar o atendimento mais pessoal e gentil. se não souber o nome pergunte
+  - Sempre que der, inclua o nome do cliente para tornar o atendimento mais pessoal e gentil; se não souber o nome, pergunte.
   - Se for preciso transferir para outro setor, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
+  - Nunca exponha seu raciocínio, pensamentos ou etapas internas (por exemplo, <think>, análise, chain-of-thought). Pense em silêncio e forneça apenas a resposta final ao usuário.
   
   Prompt Específico:
   ${openAiSettings.prompt}
   
-  Siga essas instruções com cuidado para garantir um atendimento claro e amigável em todas as respostas.`;
+  Siga essas instruções para garantir um atendimento claro, cordial e 100% em português do Brasil.`;
 
   // Handle text message
   if (msg.message?.conversation || msg.message?.extendedTextMessage?.text) {
