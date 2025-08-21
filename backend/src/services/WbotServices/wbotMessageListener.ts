@@ -2730,8 +2730,10 @@ const flowbuilderIntegration = async (
 
   // Verificação se o ticket está sendo tratado por bot
   if (!ticket.isBot) {
-    console.log(`[FLOWBUILDER_INTEGRATION] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
-    return;
+    // Se não é bot ainda, mas está iniciando integração, marcar para true
+    try {
+      await ticket.update({ isBot: true });
+    } catch {}
   }
 
   const io = getIO();
@@ -3201,8 +3203,11 @@ export const handleMessageIntegration = async (
         isFirstMsg
       );
     } else {
+      const incomingBody = getBodyMessage(msg);
       if (
-        !isNaN(parseInt(ticket.lastMessage)) &&
+        !msg.key.fromMe &&
+        incomingBody &&
+        !isNaN(parseInt(incomingBody)) &&
         ticket.status !== "open" &&
         ticket.status !== "closed"
       ) {
@@ -3235,8 +3240,7 @@ const executeFlowBuilderAfterQueue = async (
 
   // Verificação se o ticket está sendo tratado por bot
   if (!ticket.isBot) {
-    console.log(`[FLOWBUILDER] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
-    return false;
+    try { await ticket.update({ isBot: true }); } catch {}
   }
 
   // Verificação e execução do FlowBuilder da fila após atribuição
@@ -3347,8 +3351,9 @@ const flowBuilderQueue = async (
   }
 
   // Verificação se o ticket está sendo tratado por bot
-  if (!ticket.isBot) {
-    console.log(`[FLOWBUILDER_QUEUE] Ticket ${ticket.id} não está marcado como bot, ignorando FlowBuilder`);
+  const inActiveFlow = !!(ticket.flowStopped && ticket.lastFlowId);
+  if (!ticket.isBot && !inActiveFlow) {
+    console.log(`[FLOWBUILDER_QUEUE] Ticket ${ticket.id} não está marcado como bot e não está em fluxo ativo, ignorando FlowBuilder`);
     return;
   }
 
@@ -3359,6 +3364,11 @@ const flowBuilderQueue = async (
       id: ticket.flowStopped
     }
   });
+
+  if (!flow) {
+    console.log(`[FLOWBUILDER_QUEUE] Nenhum flow encontrado para flowStopped=${ticket.flowStopped}, abortando`);
+    return;
+  }
 
   const mountDataContact = {
     number: contact.number,

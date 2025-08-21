@@ -162,6 +162,20 @@ export const ActionsWebhookService = async (
     let ticket = null;
     let noAlterNext = false;
 
+    // ================= NEW FLOW GRAPH STRUCTURE =================
+    // Mapa de nós e conexões para acesso O(1) e facilitar avanço passo-a-passo
+    const flowGraph = {
+      nodeMap: nodes.reduce((acc: Record<string, INodes>, n: INodes) => {
+        acc[n.id] = n; return acc;
+      }, {}),
+      outMap: connects.reduce((acc: Record<string, IConnections[]>, c: IConnections) => {
+        if (!acc[c.source]) acc[c.source] = [];
+        acc[c.source].push(c);
+        return acc;
+      }, {})
+    };
+    // =============================================================
+
     for (let i = 0; i < lengthLoop; i++) {
       let nodeSelected: any;
       let ticketInit: Ticket;
@@ -184,21 +198,24 @@ export const ActionsWebhookService = async (
 
         if (execFn === "") {
           console.log("UPDATE5...");
-          nodeSelected = {
-            type: "menu"
-          };
+          // Seleciona o nó atual com base em next (lastFlowId)
+          nodeSelected = flowGraph.nodeMap[next];
+          if (!nodeSelected) {
+            console.log("UPDATE5a... Nó atual não encontrado para next:", next);
+            break;
+          }
         } else {
           console.log("UPDATE6...");
-          nodeSelected = nodes.filter(node => node.id === execFn)[0];
+          nodeSelected = flowGraph.nodeMap[execFn];
         }
       } else {
         console.log("UPDATE7...");
-        const otherNode = nodes.filter(node => node.id === next)[0];
+        const otherNode = flowGraph.nodeMap[next];
         if (otherNode) {
           nodeSelected = otherNode;
         } else {
           console.log(`No node found for next: ${next}. Skipping to next iteration.`);
-          const nextConnection = connects.find(connect => connect.source === next);
+          const nextConnection = (flowGraph.outMap[next] || [])[0];
           if (nextConnection) {
             next = nextConnection.target;
           } else {
@@ -561,33 +578,111 @@ export const ActionsWebhookService = async (
       let isMenu: boolean;
 
       if (nodeSelected.type === "menu") {
-        console.log(650, "menu");
+        console.log(650, "menu - Processing menu node:", nodeSelected.id);
         if (pressKey) {
-          const filterOne = connectStatic.filter(
-            confil => confil.source === next
-          );
-          const filterTwo = filterOne.filter(
+          console.log("Menu - Processing user input:", pressKey);
+          
+          const currentConnections = flowGraph.outMap[nodeSelected.id] || [];
+          console.log("Menu - Available connections from current node:", currentConnections);
+          
+          const selectedConnection = currentConnections.filter(
             filt2 => filt2.sourceHandle === "a" + pressKey
           );
-          if (filterTwo.length > 0) {
-            execFn = filterTwo[0].target;
+          console.log("Menu - Selected connection for option", pressKey, ":", selectedConnection);
+          
+          if (selectedConnection.length > 0) {
+            execFn = selectedConnection[0].target;
+            console.log("Menu - Next node selected:", execFn);
           } else {
+            console.log("Menu - No connection found for option:", pressKey);
             execFn = undefined;
           }
+          
           if (execFn === undefined) {
+            console.log("Menu - Breaking execution - no valid connection");
             break;
           }
+          
           pressKey = "999";
 
-          const isNodeExist = nodes.filter(item => item.id === execFn);
-          console.log(674, "menu");
-          if (isNodeExist.length > 0) {
-            isMenu = isNodeExist[0].type === "menu" ? true : false;
+          const isNodeExist = flowGraph.nodeMap[execFn];
+          console.log("Menu - Checking if next node exists:", !!isNodeExist);
+          if (isNodeExist) {
+            isMenu = isNodeExist.type === "menu" ? true : false;
+            console.log("Menu - Next node is menu:", isMenu);
+            // NEW: If the next node is also a menu, send it immediately (second menu issue fix)
+            if (isMenu) {
+              const nextMenuNode: any = isNodeExist;
+              console.log("Menu - Immediate rendering of chained menu node:", nextMenuNode.id);
+              try {
+                let optionsMenu2 = "";
+                nextMenuNode.data.arrayOption.forEach(item => {
+                  optionsMenu2 += `[${item.number}] ${item.value}\n`;
+                });
+
+                const menuCreate2 = `${nextMenuNode.data.message}\n\n${optionsMenu2}`;
+
+                const webhook2 = ticket?.dataWebhook;
+                let msg2;
+                if (webhook2 && webhook2.hasOwnProperty("variables")) {
+                  msg2 = {
+                    body: replaceMessages(webhook2, menuCreate2),
+                    number: numberClient,
+                    companyId: companyId
+                  };
+                } else {
+                  msg2 = {
+                    body: menuCreate2,
+                    number: numberClient,
+                    companyId: companyId
+                  };
+                }
+
+                const ticketDetails2 = await ShowTicketService(ticket?.id ?? idTicket, companyId);
+                await typeSimulation(ticketDetails2, "composing");
+                await SendWhatsAppMessage({
+                  body: msg2.body,
+                  ticket: ticketDetails2,
+                  quotedMsg: null
+                });
+                SetTicketMessagesAsRead(ticketDetails2);
+                await ticketDetails2.update({
+                  lastMessage: formatBody(msg2.body, ticketDetails2)
+                });
+                await intervalWhats("1");
+
+                // Refresh ticket instance
+                ticket = await Ticket.findOne({
+                  where: { id: (ticket?.id ?? idTicket), whatsappId: whatsappId, companyId }
+                });
+                if (ticket) {
+                  await ticket.update({
+                    queueId: ticket.queueId ? ticket.queueId : null,
+                    userId: null,
+                    companyId: companyId,
+                    flowWebhook: true,
+                    isBot: true,
+                    lastFlowId: nextMenuNode.id, // point to the new menu node
+                    nextFlowId: nextMenuNode.id,
+                    dataWebhook: dataWebhook,
+                    hashFlowId: hashWebhookId,
+                    flowStopped: idFlowDb.toString()
+                  });
+                }
+                console.log("Menu - Second (chained) menu sent, waiting for user input");
+              } catch (err) {
+                console.log("Menu - Error sending chained menu:", err);
+              }
+              // Atualiza variável de avanço em memória
+              next = isNodeExist.id;
+              // Stop further processing to await the next user response for the chained menu
+              break;
+            }
           } else {
             isMenu = false;
           }
         } else {
-          console.log(681, "menu");
+          console.log("Menu - Sending menu options to user");
           let optionsMenu = "";
           nodeSelected.data.arrayOption.map(item => {
             optionsMenu += `[${item.number}] ${item.value}\n`;
@@ -612,7 +707,7 @@ export const ActionsWebhookService = async (
             };
           }
 
-          const ticketDetails = await ShowTicketService(ticket.id, companyId);
+          const ticketDetails = await ShowTicketService(ticket?.id ?? idTicket, companyId);
 
           const messageData: MessageData = {
             wid: randomString(50),
@@ -622,7 +717,7 @@ export const ActionsWebhookService = async (
             read: true
           };
 
-          await typeSimulation(ticket, "composing");
+          await typeSimulation(ticketDetails, "composing");
 
           await SendWhatsAppMessage({
             body: msg.body,
@@ -633,7 +728,7 @@ export const ActionsWebhookService = async (
           SetTicketMessagesAsRead(ticketDetails);
 
           await ticketDetails.update({
-            lastMessage: formatBody(msg.body, ticket.contact)
+            lastMessage: formatBody(msg.body, ticketDetails)
           });
           await intervalWhats("1");
 
@@ -661,13 +756,16 @@ export const ActionsWebhookService = async (
               userId: null,
               companyId: companyId,
               flowWebhook: true,
+              isBot: true,
               lastFlowId: nodeSelected.id,
+              nextFlowId: nodeSelected.id,
               dataWebhook: dataWebhook,
               hashFlowId: hashWebhookId,
               flowStopped: idFlowDb.toString()
             });
           }
 
+          console.log("Menu - Ticket updated, breaking to wait for user response");
           break;
         }
       }
@@ -675,50 +773,61 @@ export const ActionsWebhookService = async (
       let isContinue = false;
 
       if (pressKey === "999" && execCount > 0) {
-        console.log(587, "ActionsWebhookService | 587");
+        console.log("ActionsWebhookService - Menu option processed, continuing to next node");
 
         pressKey = undefined;
         let result = connects.filter(connect => connect.source === execFn)[0];
         if (typeof result === "undefined") {
           next = "";
+          console.log("No connection found from executed node, ending flow");
         } else {
           if (!noAlterNext) {
             next = result.target;
+            console.log("Moving to next node:", next);
           }
         }
       } else {
         let result;
 
-        if (isMenu) {
+        // Caso tenha sido pressionada uma opção e o próximo nó não seja menu,
+        // seguir diretamente para o destino escolhido (execFn)
+        if (pressKey === "999" && execFn && !isMenu) {
+          result = { target: execFn } as any;
+          isContinue = true;
+          pressKey = undefined;
+          console.log("Pressed key processed, jumping to chosen node:", execFn);
+        } else if (isMenu) {
           result = { target: execFn };
           isContinue = true;
           pressKey = undefined;
+          console.log("Menu node processed, continuing with:", execFn);
         } else if (isRandomizer) {
           isRandomizer = false;
           result = next;
+          console.log("Randomizer node processed, continuing with:", next);
         } else {
-          result = connects.filter(connect => connect.source === nodeSelected.id)[0];
+          result = (flowGraph.outMap[nodeSelected.id] || [])[0];
+          console.log("Standard node processed, next connection:", result);
         }
 
         if (typeof result === "undefined") {
           next = "";
+          console.log("No next connection found, ending flow");
         } else {
           if (!noAlterNext) {
             next = result.target;
+            console.log("Moving to next node:", next);
           }
         }
-        console.log(619, "ActionsWebhookService");
       }
 
       if (!pressKey && !isContinue) {
-        const nextNode = connects.filter(
-          connect => connect.source === nodeSelected.id
-        ).length;
+  const nextNode = (flowGraph.outMap[nodeSelected.id] || []).length;
 
-        console.log(626, "ActionsWebhookService");
+        console.log("Checking for next connections from node:", nodeSelected.id, "found:", nextNode);
 
         if (nextNode === 0) {
-          console.log(654, "ActionsWebhookService");
+          console.log("No next connections found - ending flow");
 
           await Ticket.findOne({
             where: { id: idTicket, whatsappId, companyId: companyId }
@@ -729,6 +838,7 @@ export const ActionsWebhookService = async (
             flowWebhook: false,
             flowStopped: idFlowDb.toString()
           });
+          console.log("Flow completed - ticket updated");
           break;
         }
       }
@@ -738,19 +848,22 @@ export const ActionsWebhookService = async (
       if (next === "" || next === null) {
         if (i + 1 < nodes.length) {
           next = nodes[i + 1].id;
+          console.log("No specific next node, using sequential:", next);
         } else {
+          console.log("No more nodes available, ending flow");
           break;
         }
       }
 
-      console.log(678, "ActionsWebhookService");
+      console.log("Node processing completed, continuing with next:", next);
 
-      console.log("UPDATE10...");
+      console.log("Updating ticket with current node state");
       ticket = await Ticket.findOne({
         where: { id: idTicket, whatsappId, companyId: companyId }
       });
 
       if (ticket && ticket.status === "closed") {
+        console.log("Ticket is closed, notifying socket and ending flow");
         io.of(String(companyId))
           .emit(`company-${ticket.companyId}-ticket`, {
             action: "delete",
@@ -758,7 +871,7 @@ export const ActionsWebhookService = async (
           });
       }
 
-      console.log("UPDATE12...");
+      console.log("Updating ticket state for next iteration");
       if (ticket) {
         await ticket.update({
           whatsappId: whatsappId,
@@ -771,6 +884,7 @@ export const ActionsWebhookService = async (
           hashFlowId: hashWebhookId,
           flowStopped: idFlowDb.toString()
         });
+        console.log("Ticket updated with next node:", next);
       }
 
       noAlterNext = false;

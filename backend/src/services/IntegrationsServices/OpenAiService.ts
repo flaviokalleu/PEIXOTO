@@ -15,6 +15,9 @@ import Groq from "groq-sdk";
 import { groq } from '@ai-sdk/groq';
 import { generateText } from 'ai';
 import { createGroq } from '@ai-sdk/groq';
+import axios from "axios";
+import mime from "mime-types";
+import SendWhatsAppMedia from "../WbotServices/SendWhatsAppMedia";
 import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
@@ -479,6 +482,83 @@ const processResponse = async (
 ): Promise<void> => {
   let response = responseText;
 
+  // Se a própria resposta da IA conter diretivas de mídia, baixar e enviar a(s) mídia(s) com o restante do texto como legenda
+  try {
+    const directiveRegex = /(imagem|video|vídeo|documento)\s*:\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gim;
+    const directives: Array<{ kind: 'image' | 'video' | 'document'; url: string }> = [];
+    let match: RegExpExecArray | null;
+    while ((match = directiveRegex.exec(response)) !== null) {
+      const rawKind = (match[1] || '').toLowerCase();
+      const url = match[2] || match[3] || match[4];
+      if (!url) continue;
+      let kind: 'image' | 'video' | 'document' = 'image';
+      if (rawKind.includes('video') || rawKind.includes('vídeo')) kind = 'video';
+      else if (rawKind.includes('document')) kind = 'document';
+      directives.push({ kind, url });
+    }
+
+    if (directives.length > 0) {
+      const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
+      if (!fs.existsSync(publicFolder)) {
+        fs.mkdirSync(publicFolder, { recursive: true });
+      }
+
+      const caption = response.replace(directiveRegex, '').trim();
+
+      for (const d of directives) {
+        try {
+          const resp = await axios.get<ArrayBuffer>(d.url, { responseType: 'arraybuffer', validateStatus: s => s! >= 200 && s < 400 });
+          const buf = Buffer.from(resp.data);
+          const urlPath = (() => { try { return new URL(d.url).pathname; } catch { return ''; } })();
+          let base = path.basename(urlPath || '');
+          if (!base || base === '/' || base === '.') {
+            base = `media_${Date.now()}`;
+          }
+          let ext = path.extname(base).replace('.', '') || '';
+          let ct = (resp.headers['content-type'] || resp.headers['Content-Type'] || '') as string;
+          if (!ext && ct) {
+            const guessed = mime.extension(ct);
+            if (guessed) ext = guessed;
+          }
+          if (!ext) {
+            ext = d.kind === 'image' ? 'jpg' : d.kind === 'video' ? 'mp4' : 'pdf';
+          }
+          const safeName = base.replace(/[^a-zA-Z0-9_.-]/g, '_');
+          const fileName = safeName.endsWith(`.${ext}`) ? safeName : `${safeName}.${ext}`;
+          const filePath = path.join(publicFolder, fileName);
+          fs.writeFileSync(filePath, new Uint8Array(buf));
+
+          let mimetype = mime.lookup(filePath) || ct || (d.kind === 'image' ? 'image/jpeg' : d.kind === 'video' ? 'video/mp4' : 'application/octet-stream');
+
+          const mediaFile: any = {
+            fieldname: 'file',
+            originalname: fileName,
+            encoding: '7bit',
+            mimetype: String(mimetype),
+            destination: publicFolder,
+            filename: fileName,
+            path: filePath,
+            size: buf.length
+          };
+
+          await SendWhatsAppMedia({ media: mediaFile, ticket, body: caption });
+        } catch (err) {
+          console.error(`Erro ao baixar/enviar mídia (resposta IA):`, err);
+          const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+            text: `Tive um problema para enviar a mídia solicitada. Poderia verificar o link e tentar novamente?`,
+          });
+          await verifyMessage(sentMessage!, ticket, contact);
+        }
+      }
+
+      // Após enviar mídias, não enviar texto/áudio duplicado
+      return;
+    }
+  } catch (e) {
+    console.log('Falha ao processar diretivas de mídia na resposta da IA:', e);
+    // Continua fluxo normal
+  }
+
   // Check for transfer action trigger
   if (response?.toLowerCase().includes("ação: transferir para o setor de atendimento")) {
     await transferQueue(openAiSettings.queueId, ticket, contact);
@@ -554,7 +634,7 @@ const handleOpenAIRequest = async (openai: SessionOpenAi, messagesAI: any[], ope
   }
 };
 
-// Handles Groq request using AI SDK with intelligent model rotation
+// Handles Groq request for chat completions
 const handleGroqRequest = async (
   apiKey: string,
   messagesAI: any[],
@@ -564,94 +644,68 @@ const handleGroqRequest = async (
   ticketId: number
 ): Promise<string> => {
   const startTime = Date.now();
-  let selectedModel = "";
-  let failedModels: string[] = [];
-  let maxRetries = 3;
   
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      const result = await executeWithRetries(
-        async () => {
-          return await withProviderConcurrency('groq', async () => {
-            // Seleção inteligente de modelo baseada na complexidade e falhas anteriores
-            const messageLength = bodyMessage.length;
-            const historyLength = messagesAI.length;
-            selectedModel = getAvailableGroqModel(messageLength, historyLength, failedModels);
-            
-            console.log(`🚀 Groq AI SDK Request - Ticket: ${ticketId}, Model: ${selectedModel} (tentativa ${attempt}/${maxRetries})`);
-            
-            // Use AI SDK for generation with API key from prompt
-            process.env.GROQ_API_KEY = apiKey;
-            
-            // Prepare conversation context
-            let conversationContext = promptSystem + "\n\n";
-            messagesAI.forEach(msg => {
-              if (msg.role === "user") {
-                conversationContext += `Usuário: ${msg.content}\n`;
-              } else if (msg.role === "assistant") {
-                conversationContext += `Assistente: ${msg.content}\n`;
-              }
-            });
-            conversationContext += `Usuário: ${bodyMessage}\n\nAssistente:`;
-            
-            const { text } = await generateText({
-              model: groq(selectedModel),
-              prompt: conversationContext,
-              temperature: openAiSettings.temperature || 0.7,
-            });
+  try {
+    const result = await executeWithRetries(
+      async () => {
+        return await withProviderConcurrency('groq', async () => {
+          console.log(`🚀 Groq Request - Ticket: ${ticketId}`);
+          
+          const groq = new Groq({ apiKey });
+          
+          // Prepare messages for Groq (similar to OpenAI format)
+          const groqMessages = [
+            { role: "system", content: promptSystem },
+            ...messagesAI,
+            { role: "user", content: bodyMessage }
+          ];
 
-            console.log(`✅ Groq AI SDK Response Success - Ticket: ${ticketId}, Model: ${selectedModel}`);
-            
-            return text;
+          // Use default model if GROQ is specified
+          const modelToUse = openAiSettings.model === 'GROQ' ? 'llama3-8b-8192' : openAiSettings.model;
+
+          const chatCompletion = await groq.chat.completions.create({
+            messages: groqMessages,
+            model: modelToUse,
+            max_tokens: openAiSettings.maxTokens || 500,
+            temperature: openAiSettings.temperature || 0.7,
           });
-        },
-        { providerKey: `groq:${selectedModel}` }
-      );
-      
-      const responseTime = Date.now() - startTime;
-      updateStats('groq', true, responseTime);
-      
-      return result;
-      
-    } catch (error: any) {
-      console.error(`❌ Groq AI SDK Error - Ticket: ${ticketId}, Model: ${selectedModel}, Attempt: ${attempt}:`, {
-        message: error.message,
-        cause: error.cause
-      });
-      
-      // Adicionar modelo que falhou à lista de falhas
-      if (selectedModel && !failedModels.includes(selectedModel)) {
-        failedModels.push(selectedModel);
-        console.log(`🚫 Modelo ${selectedModel} adicionado à lista de falhas. Total falharam: ${failedModels.length}`);
-      }
-      
-      // Se ainda há tentativas, continua o loop
-      if (attempt < maxRetries) {
-        console.log(`🔄 Tentando novamente com modelo diferente... (${attempt + 1}/${maxRetries})`);
-        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Backoff incremental
-        continue;
-      }
-      
-      // Última tentativa falhou
-      const responseTime = Date.now() - startTime;
-      updateStats('groq', false, responseTime);
-      
-      // Re-throw with enhanced error information
-      if (error.message?.includes('API key') || error.message?.includes('authentication')) {
-        throw new Error(`API key inválida para Groq: ${error.message}`);
-      } else if (error.message?.includes('rate limit') || error.message?.includes('429')) {
-        throw new Error(`Rate limit excedido para todos os modelos Groq testados (${failedModels.join(', ')}). Tente novamente em alguns segundos.`);
-      } else if (error.message?.includes('quota') || error.message?.includes('billing')) {
-        throw new Error('Cota do Groq excedida. Verifique sua conta.');
-      }
-      
-      throw new Error(`Falha em todos os modelos Groq após ${maxRetries} tentativas: ${error.message}`);
+
+          console.log(`✅ Groq Response Success - Ticket: ${ticketId}, Model: ${modelToUse}`);
+          
+          return chatCompletion.choices[0]?.message?.content || "";
+        });
+      },
+      { providerKey: `groq:${openAiSettings.model}` }
+    );
+    
+    const responseTime = Date.now() - startTime;
+    updateStats('groq', true, responseTime);
+    
+    return result;
+  } catch (error: any) {
+    const responseTime = Date.now() - startTime;
+    updateStats('groq', false, responseTime);
+    
+    console.error(`❌ Groq Error - Ticket: ${ticketId}:`, {
+      status: error.response?.status,
+      statusText: error.response?.statusText,
+      data: error.response?.data,
+      message: error.message
+    });
+    
+    // Re-throw with enhanced error information
+    if (error.message?.includes('API key')) {
+      throw new Error(`API key inválida para Groq: ${error.message}`);
+    } else if (error.response?.status === 429) {
+      throw new Error('Rate limit excedido para Groq. Tente novamente em alguns segundos.');
+    } else if (error.response?.status === 403) {
+      throw new Error('Acesso negado ao Groq. Verifique as permissões da API key.');
     }
+    
   }
-  
-  // Nunca deveria chegar aqui, mas por garantia
-  throw new Error('Erro inesperado no sistema de rotação de modelos Groq');
-};// Main function to handle AI interactions
+};
+
+// Main function to handle AI interactions
 export const handleOpenAi = async (
   openAiSettings: IOpenAi,
   msg: proto.IWebMessageInfo,
@@ -675,6 +729,92 @@ export const handleOpenAi = async (
   if (!bodyMessage && !msg.message?.audioMessage) {
     console.log(`📝 Sem mensagem de texto ou áudio para processar`);
     return;
+  }
+
+  // Suporte a prompts com mídia: imagem|video|documento:"URL" => baixa e envia a mídia com o restante do texto como legenda
+  if (bodyMessage) {
+    try {
+      const directiveRegex = /(imagem|video|vídeo|documento)\s*:\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gim;
+      const directives: Array<{ kind: 'image' | 'video' | 'document'; url: string }> = [];
+      let match: RegExpExecArray | null;
+      while ((match = directiveRegex.exec(bodyMessage)) !== null) {
+        const rawKind = (match[1] || '').toLowerCase();
+        const url = match[2] || match[3] || match[4];
+        if (!url) continue;
+        let kind: 'image' | 'video' | 'document' = 'image';
+        if (rawKind.includes('video') || rawKind.includes('vídeo')) kind = 'video';
+        else if (rawKind.includes('document')) kind = 'document';
+        directives.push({ kind, url });
+      }
+
+      if (directives.length > 0) {
+        const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
+        if (!fs.existsSync(publicFolder)) {
+          fs.mkdirSync(publicFolder, { recursive: true });
+        }
+
+        // Remove trechos de diretivas do texto e usa como legenda
+        const caption = bodyMessage.replace(directiveRegex, '').trim();
+
+        for (const d of directives) {
+          try {
+            const resp = await axios.get<ArrayBuffer>(d.url, { responseType: 'arraybuffer', validateStatus: s => s! >= 200 && s < 400 });
+            const buf = Buffer.from(resp.data);
+
+            // Definir nome do arquivo a partir da URL ou content-type
+            const urlPath = (() => { try { return new URL(d.url).pathname; } catch { return ''; } })();
+            let base = path.basename(urlPath || '');
+            // Se não tiver nome, cria
+            if (!base || base === '/' || base === '.' ) {
+              base = `media_${Date.now()}`;
+            }
+            // Checar extensão válida
+            let ext = path.extname(base).replace('.', '') || '';
+            let ct = (resp.headers['content-type'] || resp.headers['Content-Type'] || '') as string;
+            if (!ext && ct) {
+              const guessed = mime.extension(ct);
+              if (guessed) ext = guessed;
+            }
+            // Ajustar por tipo desejado
+            if (!ext) {
+              ext = d.kind === 'image' ? 'jpg' : d.kind === 'video' ? 'mp4' : 'pdf';
+            }
+            const safeName = base.replace(/[^a-zA-Z0-9_.-]/g, '_');
+            const fileName = safeName.endsWith(`.${ext}`) ? safeName : `${safeName}.${ext}`;
+            const filePath = path.join(publicFolder, fileName);
+            fs.writeFileSync(filePath, new Uint8Array(buf));
+
+            // Determinar mimetype coerente
+            let mimetype = mime.lookup(filePath) || ct || (d.kind === 'image' ? 'image/jpeg' : d.kind === 'video' ? 'video/mp4' : 'application/octet-stream');
+
+            const mediaFile: any = {
+              fieldname: 'file',
+              originalname: fileName,
+              encoding: '7bit',
+              mimetype: String(mimetype),
+              destination: publicFolder,
+              filename: fileName,
+              path: filePath,
+              size: buf.length
+            };
+
+            await SendWhatsAppMedia({ media: mediaFile, ticket, body: caption });
+          } catch (err) {
+            console.error(`Erro ao baixar/enviar mídia:`, err);
+            const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+              text: `Não consegui baixar/enviar a mídia em ${d.url}. Verifique o link e tente novamente.`,
+            });
+            await verifyMessage(sentMessage!, ticket, contact);
+          }
+        }
+
+        // Após enviar mídias, não processa IA para este texto
+        return;
+      }
+    } catch (e) {
+      console.log('Falha ao processar diretivas de mídia no prompt:', e);
+      // Continua fluxo normal de IA
+    }
   }
 
   if (!openAiSettings) {
@@ -708,7 +848,12 @@ export const handleOpenAi = async (
   ].includes(openAiSettings.model);
   
   // Sistema de rotação inteligente quando GROQ é selecionado
-  const isGroqModel = openAiSettings.model === 'GROQ';
+  const isGroqModel = openAiSettings.model === 'GROQ' || [
+    "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768",
+    "gemma-7b-it", "gemma2-9b-it", "llama-3.1-8b-instant",
+    "llama-3.1-70b-versatile", "llama-3.2-1b-preview", "llama-3.2-3b-preview",
+    "llama-3.2-11b-text-preview", "llama-3.2-90b-text-preview"
+  ].includes(openAiSettings.model);
 
   console.log(`🤖 Provider: ${isGroqModel ? 'GROQ (Rotação Inteligente)' : isOpenAIModel ? 'OpenAI' : 'Modelo Customizado'} | Ticket: ${ticket.id}`);
 
@@ -747,13 +892,16 @@ export const handleOpenAi = async (
     if (groqIndex === -1) {
       try {
         const apiKey = openAiSettings.apiKey;
-        if (!apiKey || !apiKey.startsWith('gsk_')) {
+        if (!apiKey) {
           const errorMessage = await wbot.sendMessage(msg.key.remoteJid!, {
-            text: "🔧 Chave API do Groq inválida. Deve começar com 'gsk_'. Verifique a configuração.",
+            text: "🔧 Configuração da IA não encontrada. Verifique se a chave API está configurada corretamente.",
           });
           await verifyMessage(errorMessage!, ticket, contact);
           return;
         }
+        
+        console.log(`✅ API Key Groq presente para ticket ${ticket.id}: ${apiKey.slice(0,10)}...${apiKey.slice(-4)}`);
+        
         groq = { 
           id: ticket.id, 
           apiKey,
