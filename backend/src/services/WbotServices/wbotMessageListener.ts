@@ -2705,8 +2705,14 @@ export const transferQueue = async (
   ticket: Ticket,
   contact: Contact
 ): Promise<void> => {
+  // Transferir para fila deve remover o atendente e colocar o ticket como pendente
   await UpdateTicketService({
-    ticketData: { queueId: queueId, userId: ticket.userId },
+    ticketData: {
+      queueId: queueId,
+      userId: null,
+      status: "pending",
+      isTransfered: true
+    },
     ticketId: ticket.id,
     companyId: ticket.companyId
   });
@@ -3982,7 +3988,9 @@ const handleMessage = async (
       !isGroup &&
       !msg.key.fromMe &&
       !ticket.userId &&
-      !isNil(whatsapp.promptId)
+      !isNil(whatsapp.promptId) &&
+      // Evitar duplicidade com FlowBuilder OpenAI
+      !(isOpenai && !isNil(flow))
     ) {
       const { prompt } = whatsapp;
       console.log(`🔍 OpenAI na conexão - Ticket ID: ${ticket.id}, Prompt ID: ${whatsapp.promptId}, Queue ID: ${ticket.queueId}`);

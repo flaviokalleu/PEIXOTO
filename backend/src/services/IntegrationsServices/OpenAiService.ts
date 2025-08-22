@@ -569,7 +569,7 @@ const processResponse = async (
       const botNamePattern = escapeRegExp(botName);
       // Substitui ocorrências como: "Olá, Eloah" / "Oi Eloah" por "Olá, <cliente>" ou apenas "Olá"
       for (const g of greetings) {
-        const rx = new RegExp(`(\\b${g}\\b)([!,.]?)[\ -\s]*${botNamePattern}(\\b)`, "ig");
+        const rx = new RegExp(`(\\b${g}\\b)([!,.]?)[\-\s]*${botNamePattern}(\\b)`, "ig");
         response = response.replace(rx, (_m, g1: string, punc: string, b3: string) => {
           if (userName && userNorm !== botNorm) {
             return `${g1}${punc ? punc : ","} ${userName}${b3}`;
@@ -889,6 +889,38 @@ export const handleOpenAi = async (
   mediaSent: Message | undefined,
   ticketTraking: TicketTraking
 ): Promise<void> => {
+  // Sistema anti-duplicidade GLOBAL robusto
+  const msgKey = msg.key?.id || msg.key?.remoteJid || '';
+  const timestamp = msg.messageTimestamp || Date.now();
+  const tempBodyMessage = getBodyMessage(msg);
+  const bodyHash = tempBodyMessage ? require('crypto').createHash('md5').update(tempBodyMessage).digest('hex').substring(0, 8) : 'no-body';
+  const dedupeKey = `${ticket.id}:${msgKey}:${timestamp}:${bodyHash}`;
+  
+  // Usar um Map global mais robusto
+  if (!(global as any).__aiProcessingGlobal) {
+    (global as any).__aiProcessingGlobal = new Map();
+  }
+  const processing: Map<string, { time: number, count: number }> = (global as any).__aiProcessingGlobal;
+  
+  // Limpa entradas antigas (mais de 60s)
+  const now = Date.now();
+  for (const [key, data] of processing.entries()) {
+    if (now - data.time > 60000) {
+      processing.delete(key);
+    }
+  }
+  
+  // Verifica se já está sendo processado
+  if (processing.has(dedupeKey)) {
+    const existing = processing.get(dedupeKey)!;
+    existing.count++;
+    console.log(`🚫 BLOQUEANDO DUPLICATA #${existing.count}: ${dedupeKey} (processando há ${now - existing.time}ms)`);
+    return;
+  }
+  
+  // Registra que está processando
+  processing.set(dedupeKey, { time: now, count: 1 });
+  console.log(`🔒 INICIANDO PROCESSAMENTO ÚNICO: ${dedupeKey}`);
   // Log inicial para debugging
   console.log(`🎫 Iniciando handleOpenAi - Ticket: ${ticket.id}, Company: ${ticket.companyId}, Modelo: ${openAiSettings.model}`);
   console.log(`🔍 DEBUG - Queue ID: ${ticket.queueId}, Prompt ID: ${(openAiSettings as any).id || 'N/A'}`);
@@ -896,12 +928,14 @@ export const handleOpenAi = async (
   
   if (contact.disableBot) {
     console.log(`🤖 Bot desabilitado para contato ${contact.id}`);
+    processing.delete(dedupeKey);
     return;
   }
 
   const bodyMessage = getBodyMessage(msg);
   if (!bodyMessage && !msg.message?.audioMessage) {
     console.log(`📝 Sem mensagem de texto ou áudio para processar`);
+    processing.delete(dedupeKey);
     return;
   }
 
@@ -983,6 +1017,7 @@ export const handleOpenAi = async (
         }
 
         // Após enviar mídias, não processa IA para este texto
+        processing.delete(dedupeKey);
         return;
       }
     } catch (e) {
@@ -993,11 +1028,13 @@ export const handleOpenAi = async (
 
   if (!openAiSettings) {
     console.log(`⚙️ Configurações do OpenAI não encontradas`);
+    processing.delete(dedupeKey);
     return;
   }
 
   if (msg.messageStubType) {
     console.log(`📌 Ignorando message stub type`);
+    processing.delete(dedupeKey);
     return;
   }
 
@@ -1038,6 +1075,7 @@ export const handleOpenAi = async (
       text: `⚙️ ${errorMsg}`,
     });
     await verifyMessage(sentMessage!, ticket, contact);
+    processing.delete(dedupeKey);
     return;
   }
 
@@ -1071,6 +1109,7 @@ export const handleOpenAi = async (
             text: "🔧 Configuração da IA não encontrada. Verifique se a chave API está configurada corretamente.",
           });
           await verifyMessage(errorMessage!, ticket, contact);
+          processing.delete(dedupeKey);
           return;
         }
         
@@ -1087,6 +1126,7 @@ export const handleOpenAi = async (
           text: "🔧 Erro na validação da chave API do Groq. Verifique se a chave está correta e ativa.",
         });
         await verifyMessage(errorMessage!, ticket, contact);
+        processing.delete(dedupeKey);
         return;
       }
     } else {
@@ -1126,18 +1166,23 @@ export const handleOpenAi = async (
       // Modo teste - sempre usar Groq
       if (groq) {
         responseText = await handleGroqRequest(openAiSettings.apiKey, messagesAI, openAiSettings, bodyMessage!, promptSystem, ticket.id);
-        // Completar caso pareça cortado
-        if (responseText) {
-          responseText = await completeWithGroq(responseText, messagesAI, openAiSettings, promptSystem, ticket.id, bodyMessage!);
-        }
+        // TEMPORARIAMENTE DESABILITADO: Completar caso pareça cortado para evitar múltiplas respostas
+        // if (responseText) {
+        //   responseText = await completeWithGroq(responseText, messagesAI, openAiSettings, promptSystem, ticket.id, bodyMessage!);
+        // }
       }
 
       if (!responseText) {
         console.error("No response from AI provider");
+        processing.delete(dedupeKey);
         return;
       }
 
       await processResponse(responseText, wbot, msg, ticket, contact, openAiSettings, ticketTraking);
+      
+      // Marcar como processado com sucesso
+      console.log(`✅ PROCESSAMENTO CONCLUÍDO: ${dedupeKey}`);
+      processing.delete(dedupeKey);
     } catch (error: any) {
       console.error(`❌ AI request failed para ticket ${ticket.id}:`, error);
       
@@ -1178,7 +1223,10 @@ export const handleOpenAi = async (
         text: errorMessage,
       });
       await verifyMessage(sentMessage!, ticket, contact);
-    }
+      
+      // Liberar chave em caso de erro
+      processing.delete(dedupeKey);
+  }
   }
   // Handle audio message
   else if (msg.message?.audioMessage && mediaSent) {
