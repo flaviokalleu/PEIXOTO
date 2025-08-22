@@ -22,6 +22,9 @@ import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import TicketTraking from "../../models/TicketTraking";
+import Queue from "../../models/Queue";
+import { Op } from "sequelize";
+import removeAccents from "remove-accents";
 
 type Session = WASocket & {
   id?: number;
@@ -380,6 +383,53 @@ const sanitizeName = (name: string): string => {
   return sanitized.substring(0, 60);
 };
 
+// Heurística simples para detectar resposta possivelmente cortada
+const isIncompleteSentence = (text: string): boolean => {
+  if (!text) return false;
+  const t = text.trim();
+  // Se termina com pontuação comum ou fechamento, consideramos completo
+  if (/[\.!?…»”"]$/.test(t)) return false;
+  // Se termina com vírgula/ dois-pontos/ conjunção comum, provável corte
+  if (/[,:;]$/.test(t)) return true;
+  // Frases muito curtas não consideramos corte
+  if (t.length < 40) return false;
+  // Caso não termine com pontuação, tratamos como possível corte
+  return true;
+};
+
+// Solicita continuação ao GROQ quando a resposta parece cortada
+const completeWithGroq = async (
+  currentText: string,
+  messagesAI: any[],
+  openAiSettings: IOpenAi,
+  promptSystem: string,
+  ticketId: number,
+  bodyMessage: string
+): Promise<string> => {
+  let finalText = currentText;
+  let attempts = 0;
+  while (attempts < 2 && isIncompleteSentence(finalText)) {
+    attempts++;
+    try {
+      // Inclui a última resposta como contexto de assistant e pede continuação
+      const extendedMsgs = [...messagesAI, { role: 'assistant', content: finalText }];
+      const continuation = await handleGroqRequest(
+        openAiSettings.apiKey,
+        extendedMsgs,
+        openAiSettings,
+        'Continue a resposta anterior e conclua de forma natural, sem repetir o que já foi dito.',
+        promptSystem,
+        ticketId
+      );
+      if (!continuation) break;
+      finalText = `${finalText}${finalText.endsWith('\n') ? '' : '\n'}${continuation}`.trim();
+    } catch (e) {
+      break;
+    }
+  }
+  return finalText;
+};
+
 // Prepares the AI messages from past messages  
 const prepareMessagesAI = (pastMessages: Message[], isGroqModel: boolean, promptSystem: string): any[] => {
   const messagesAI = [];
@@ -498,6 +548,50 @@ const processResponse = async (
     response = stripReasoningBlocks(response);
   } catch {}
 
+  // Correção: se o modelo usar o nome do robô como se fosse o nome do cliente (ex.: "Olá, Eloah"), substitui por nome do cliente ou saudação neutra
+  try {
+    const botName = (openAiSettings?.name || "").trim();
+    const userName = sanitizeName(contact?.name || "");
+    const norm = (s: string) => removeAccents(String(s || "")).toLowerCase();
+    const botNorm = norm(botName);
+    const userNorm = norm(userName);
+
+    const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    if (botNorm) {
+      const greetings = [
+        "olá",
+        "oi",
+        "bom dia",
+        "boa tarde",
+        "boa noite"
+      ];
+      const botNamePattern = escapeRegExp(botName);
+      // Substitui ocorrências como: "Olá, Eloah" / "Oi Eloah" por "Olá, <cliente>" ou apenas "Olá"
+      for (const g of greetings) {
+        const rx = new RegExp(`(\\b${g}\\b)([!,.]?)[\ -\s]*${botNamePattern}(\\b)`, "ig");
+        response = response.replace(rx, (_m, g1: string, punc: string, b3: string) => {
+          if (userName && userNorm !== botNorm) {
+            return `${g1}${punc ? punc : ","} ${userName}${b3}`;
+          }
+          return `${g1}${punc}`.trim();
+        });
+      }
+
+      // Força a autoapresentação a usar o nome do robô configurado, caso o modelo diga outro nome
+      if (botName) {
+        // "meu nome é X"
+        response = response.replace(/\b(meu nome é)\s+[a-zA-ZÀ-ÿ][\wÀ-ÿ-]*/gi, (_m, p1: string) => `${p1} ${botName}`);
+        // "sou o/a X" ou "sou X"
+        response = response.replace(/\b(sou(?:\s+(?:o|a))?)\s+[a-zA-ZÀ-ÿ][\wÀ-ÿ-]*/gi, (_m, p1: string) => `${p1} ${botName}`);
+        // "me chamo X"
+        response = response.replace(/\b(me chamo)\s+[a-zA-ZÀ-ÿ][\wÀ-ÿ-]*/gi, (_m, p1: string) => `${p1} ${botName}`);
+        // "aqui é o X" / "aqui é a X"
+        response = response.replace(/\b(aqui é(?:\s+(?:o|a))?)\s+[a-zA-ZÀ-ÿ][\wÀ-ÿ-]*/gi, (_m, p1: string) => `${p1} ${botName}`);
+      }
+    }
+  } catch {}
+
   // Se a própria resposta da IA conter diretivas de mídia, baixar e enviar a(s) mídia(s) com o restante do texto como legenda
   try {
     const directiveRegex = /(imagem|video|vídeo|documento)\s*:\s*(?:"([^"]+)"|'([^']+)'|(\S+))/gim;
@@ -576,9 +670,73 @@ const processResponse = async (
   }
 
   // Check for transfer action trigger
-  if (response?.toLowerCase().includes("ação: transferir para o setor de atendimento")) {
-    await transferQueue(openAiSettings.queueId, ticket, contact);
-    response = response.replace(/ação: transferir para o setor de atendimento/i, "").trim();
+  if (response) {
+    // Detectar instruções de transferência e extrair fila/setor
+    const lower = response.toLowerCase();
+    const transferDetected = /ação\s*:\s*transferir\s+para\s+o\s+setor(?:\s+de\s+atendimento)?/i.test(response) ||
+      /(transferir|encaminhar)\s+para\s+(a\s+)?(fila|setor)/i.test(response);
+
+    if (transferDetected) {
+      let queueRef: string | null = null;
+      let directiveToRemove: string | null = null;
+
+      // Padrões com nome/id após a instrução
+      const patterns: RegExp[] = [
+        /ação\s*:\s*transferir\s+para\s+o\s+setor(?:\s+de\s+atendimento)?\s*[:\-]\s*([^\n\r]+)/i,
+        /(transferir|encaminhar)\s+para\s+(?:a\s+)?(?:fila|setor)\s*[:\-]?\s*([^\n\r]+)/i,
+        /queue\s*[:\-]\s*([^\n\r]+)/i
+      ];
+
+      for (const rx of patterns) {
+        const m = rx.exec(response);
+        if (m && (m[2] || m[1])) {
+          queueRef = (m[2] || m[1]).trim();
+          directiveToRemove = m[0];
+          break;
+        }
+      }
+
+      let targetQueueId: number | null = null;
+      if (queueRef) {
+        // Limpa possíveis sufixos
+        const cleaned = removeAccents(queueRef).replace(/[\[\](){}*_|`<>]/g, '').trim();
+        const numeric = cleaned.match(/^(\d{1,10})$/)?.[1];
+        try {
+          if (numeric) {
+            const byId = await Queue.findOne({ where: { id: Number(numeric), companyId: ticket.companyId } });
+            if (byId) targetQueueId = byId.id;
+          }
+          if (!targetQueueId) {
+            // Busca por nome aproximado
+            const likeName = `%${cleaned}%`;
+            const byName = await Queue.findOne({
+              where: {
+                companyId: ticket.companyId,
+                name: { [Op.like]: likeName }
+              }
+            });
+            if (byName) targetQueueId = byName.id;
+          }
+        } catch (e) {
+          console.log('Erro ao procurar fila alvo:', e);
+        }
+      }
+
+      // Fallback: usa fila definida nas configurações
+      if (!targetQueueId && openAiSettings.queueId) {
+        targetQueueId = openAiSettings.queueId;
+      }
+
+      if (targetQueueId) {
+        await transferQueue(targetQueueId, ticket, contact);
+        // Remove instrução da resposta para não aparecer para o cliente
+        if (directiveToRemove) {
+          response = response.replace(directiveToRemove, '').trim();
+        } else {
+          response = response.replace(/ação\s*:\s*transferir\s+para\s+o\s+setor(?:\s+de\s+atendimento)?/i, '').trim();
+        }
+      }
+    }
   }
 
   const publicFolder: string = path.resolve(__dirname, "..", "..", "..", "public", `company${ticket.companyId}`);
@@ -941,10 +1099,13 @@ export const handleOpenAi = async (
     limit: openAiSettings.maxMessages,
   });
 
-  // Format system prompt
-  const clientName = sanitizeName(contact.name || "Amigo(a)");
+  // Format system prompt com distinção clara entre nome do robô e do cliente
+  const clientName = sanitizeName(contact.name || "");
+  const botName = sanitizeName(openAiSettings?.name || "Eloah");
   const promptSystem = `Instruções do Sistema (responda somente em português do Brasil):
-  - Use o nome ${clientName} nas respostas para que o cliente se sinta mais próximo e acolhido.
+  - Seu nome é ${botName}. Quando for se apresentar, diga que você é ${botName} (sem usar outro nome).
+  - O cliente chama-se ${clientName || 'cliente'}. Jamais trate o cliente como "${botName}" e não confunda o nome do robô com o do cliente.
+  - Se souber o nome do cliente, use-o de forma natural (ex.: "Olá, ${clientName || 'cliente'}"). Se não souber, use uma saudação neutra e pergunte o nome com educação.
   - Certifique-se de que a resposta tenha até ${openAiSettings.maxTokens} tokens e termine de forma completa, sem cortes.
   - Sempre que der, inclua o nome do cliente para tornar o atendimento mais pessoal e gentil; se não souber o nome, pergunte.
   - Se for preciso transferir para outro setor, comece a resposta com 'Ação: Transferir para o setor de atendimento'.
@@ -965,6 +1126,10 @@ export const handleOpenAi = async (
       // Modo teste - sempre usar Groq
       if (groq) {
         responseText = await handleGroqRequest(openAiSettings.apiKey, messagesAI, openAiSettings, bodyMessage!, promptSystem, ticket.id);
+        // Completar caso pareça cortado
+        if (responseText) {
+          responseText = await completeWithGroq(responseText, messagesAI, openAiSettings, promptSystem, ticket.id, bodyMessage!);
+        }
       }
 
       if (!responseText) {
