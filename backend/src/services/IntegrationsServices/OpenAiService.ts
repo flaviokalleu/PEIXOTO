@@ -78,6 +78,28 @@ const usageStats: Record<string, UsageStats> = {
   groq: { activeTickets: 0, totalRequests: 0, successfulRequests: 0, failedRequests: 0, avgResponseTime: 0, lastUpdated: Date.now() }
 };
 
+// Detecta se o usuário pediu para falar com atendente (variações comuns)
+const matchesHumanRequest = (text?: string): boolean => {
+  if (!text) return false;
+  const t = removeAccents(text).toLowerCase().trim();
+  // Normaliza espaços múltiplos
+  const n = t.replace(/\s+/g, " ");
+  const patterns: RegExp[] = [
+    /\b(quero|preciso|gostaria)\s+(de\s+)?(falar|conversar)\s+(com|c\/)\s+(um[a]?\s+)?(atendente|humano|pessoa|agente|operador)\b/,
+    /\b(falar|conversar)\s+(com|c\/)\s+(um[a]?\s+)?(atendente|humano|pessoa|agente|operador)\b/,
+    /\b(atendimento|suporte)\s+humano\b/,
+    /\b(preciso|quero|gostaria)\s+(de\s+)?(um[a]?\s+)?atendente\b/,
+    /\b(atendente)\b/ // fallback simples, avaliado por último
+  ];
+  // Evita falsos positivos simples quando só "atendente" aparece junto de negações
+  const negations = [
+    /\bnao\s+(quero|preciso)\b/,
+    /\bsem\s+(atendente|humano)\b/,
+  ];
+  if (negations.some(rx => rx.test(n))) return false;
+  return patterns.some(rx => rx.test(n));
+};
+
 // Função para atualizar estatísticas e log inteligente
 const updateStats = (provider: 'openai' | 'groq', success: boolean, responseTime?: number) => {
   const stats = usageStats[provider];
@@ -932,11 +954,53 @@ export const handleOpenAi = async (
     return;
   }
 
-  const bodyMessage = getBodyMessage(msg);
+  const bodyMessage = tempBodyMessage;
   if (!bodyMessage && !msg.message?.audioMessage) {
     console.log(`📝 Sem mensagem de texto ou áudio para processar`);
     processing.delete(dedupeKey);
     return;
+  }
+
+  // Gatilho de transferência baseado na mensagem do usuário
+  if (bodyMessage && matchesHumanRequest(bodyMessage)) {
+    try {
+      // Determinar fila alvo: usa a queueId do prompt, senão tenta heurísticas simples
+      let targetQueueId: number | null = (openAiSettings.queueId as unknown as number) || null;
+
+      if (!targetQueueId) {
+        // Busca uma fila com nome relacionado
+        const likeList = ['%atend%', '%humano%', '%suporte%', '%geral%'];
+        for (const likeName of likeList) {
+          const q = await Queue.findOne({ where: { companyId: ticket.companyId, name: { [Op.like]: likeName } } });
+          if (q) { targetQueueId = q.id; break; }
+        }
+      }
+
+      if (!targetQueueId) {
+        // Fallback final: primeira fila da empresa
+        const q = await Queue.findOne({ where: { companyId: ticket.companyId }, order: [['id', 'ASC']] });
+        if (q) targetQueueId = q.id;
+      }
+
+      if (targetQueueId) {
+        await transferQueue(targetQueueId, ticket, contact);
+        const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+          text: `\u200e *Assistente Virtual*:\nAguarde enquanto localizamos um atendente... Você será atendido em breve!`
+        });
+        await verifyMessage(sentMessage!, ticket, contact);
+      } else {
+        // Não achou fila: pelo menos informe e não siga ao fluxo de IA
+        const sentMessage = await wbot.sendMessage(msg.key.remoteJid!, {
+          text: `\u200e *Assistente Virtual*:\nNão encontrei uma fila de atendimento configurada. Um atendente será notificado.`
+        });
+        await verifyMessage(sentMessage!, ticket, contact);
+      }
+      processing.delete(dedupeKey);
+      return;
+    } catch (err) {
+      console.error('Erro ao transferir para fila via gatilho de usuário:', err);
+      // Em caso de falha, segue para o fluxo normal de IA
+    }
   }
 
   // Suporte a prompts com mídia: imagem|video|documento:"URL" => baixa e envia a mídia com o restante do texto como legenda
