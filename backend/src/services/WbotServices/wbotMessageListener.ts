@@ -4095,17 +4095,29 @@ const handleMessage = async (
           id: ticket.flowStopped
         }
       });
-      const nodes: INodes[] = flow.flow["nodes"];
-      const lastFlow = nodes.find(f => f.id === ticket.lastFlowId);
-      const typebot = lastFlow.data.typebotIntegration;
 
-      await typebotListener({
-        wbot: wbot,
-        msg,
-        ticket,
-        typebot: lastFlow.data.typebotIntegration
-      });
-      return;
+      if (!flow) {
+        console.log("Flow not found for ticket.flowStopped:", ticket.flowStopped);
+        // Continue to next processing block instead of returning
+      } else {
+        const nodes: INodes[] = flow.flow["nodes"];
+        const lastFlow = nodes.find(f => f.id === ticket.lastFlowId);
+
+        if (!lastFlow) {
+          console.log("Last flow not found for ticket.lastFlowId:", ticket.lastFlowId);
+          // Continue to next processing block instead of returning
+        } else {
+          const typebot = lastFlow.data.typebotIntegration;
+
+          await typebotListener({
+            wbot: wbot,
+            msg,
+            ticket,
+            typebot: lastFlow.data.typebotIntegration
+          });
+          return;
+        }
+      }
     }
 
     if (
