@@ -78,6 +78,45 @@ const usageStats: Record<string, UsageStats> = {
   groq: { activeTickets: 0, totalRequests: 0, successfulRequests: 0, failedRequests: 0, avgResponseTime: 0, lastUpdated: Date.now() }
 };
 
+// =====================
+// Groq Model Discovery
+// =====================
+type GroqModelCache = { models: string[]; ts: number };
+const groqModelCache: GroqModelCache = { models: [], ts: 0 };
+const GROQ_MODEL_CACHE_TTL_MS = 10 * 60 * 1000; // 10 min
+
+
+async function fetchGroqModels(apiKey: string): Promise<string[]> {
+  const strict = process.env.GROQ_NO_FALLBACK === 'true';
+  const now = Date.now();
+  if (groqModelCache.models.length && now - groqModelCache.ts < GROQ_MODEL_CACHE_TTL_MS) {
+    return groqModelCache.models;
+  }
+  if (!apiKey) {
+    if (strict) throw new Error('Groq API key ausente e modo estrito ativo (GROQ_NO_FALLBACK=true).');
+    return [];
+  }
+  try {
+    const resp = await axios.get('https://api.groq.com/openai/v1/models', {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeout: 8000
+    });
+    const list: string[] = (resp.data?.data || [])
+      .map((m: any) => m.id)
+      .filter((id: string) => /llama|mixtral|gemma|qwen|deepseek|openai\//i.test(id));
+    groqModelCache.models = list;
+    groqModelCache.ts = now;
+    if (!list.length && strict) {
+      throw new Error('Nenhum modelo Groq retornado e modo estrito ativo.');
+    }
+    return list;
+  } catch (e) {
+    if (strict) throw e;
+    console.warn('[GROQ] Falha ao buscar modelos dinâmicos:', (e as any).message);
+    return [];
+  }
+}
+
 // Detecta se o usuário pediu para falar com atendente (variações comuns)
 const matchesHumanRequest = (text?: string): boolean => {
   if (!text) return false;
@@ -495,8 +534,7 @@ const getAvailableGroqModel = (messageLength: number, historyLength: number, fai
     { name: 'openai/gpt-oss-20b', rpm: 30, tpm: 8000, tier: 'medium' },
     { name: 'allam-2-7b', rpm: 30, tpm: 6000, tier: 'medium' },
     { name: 'gemma2-9b-it', rpm: 30, tpm: 15000, tier: 'medium' },
-    { name: 'llama3-70b-8192', rpm: 30, tpm: 6000, tier: 'medium' },
-    { name: 'llama3-8b-8192', rpm: 30, tpm: 6000, tier: 'medium' },
+  // Removed deprecated llama3-* models; rely on newer llama-3.x naming
     { name: 'meta-llama/llama-guard-4-12b', rpm: 30, tpm: 15000, tier: 'medium' },
     
     // Modelos de backup com limite de 15 RPM (Free tier)
@@ -856,8 +894,12 @@ const handleGroqRequest = async (
             { role: "user", content: bodyMessage }
           ];
 
-          // Use default model if GROQ is specified
-          const modelToUse = openAiSettings.model === 'GROQ' ? 'llama3-8b-8192' : openAiSettings.model;
+          // Use default model if GROQ marker is specified. Update deprecated model names.
+          const FALLBACK_GROQ_PRIMARY = 'llama-3.1-8b-instant';
+          const FALLBACK_GROQ_SECONDARY = 'llama-3.1-70b-versatile';
+          const deprecated = ['llama3-8b-8192'];
+          const configured = openAiSettings.model === 'GROQ' ? FALLBACK_GROQ_PRIMARY : openAiSettings.model;
+          const modelToUse = deprecated.includes(configured) ? FALLBACK_GROQ_PRIMARY : configured;
 
           const chatCompletion = await groq.chat.completions.create({
             messages: groqMessages,
@@ -888,6 +930,32 @@ const handleGroqRequest = async (
       data: error.response?.data,
       message: error.message
     });
+
+    // Automatic fallback if model was decommissioned
+    if (error.message?.includes('model `llama3-8b-8192` has been decommissioned')) {
+      try {
+        console.warn(`⚠️ Modelo deprecated detectado para ticket ${ticketId}. Tentando fallback...`);
+        const groq = new Groq({ apiKey });
+        const groqMessages = [
+          { role: 'system', content: promptSystem },
+          ...messagesAI,
+          { role: 'user', content: bodyMessage }
+        ];
+        const fallbackModel = 'llama-3.1-8b-instant';
+        const chatCompletion = await groq.chat.completions.create({
+          messages: groqMessages,
+          model: fallbackModel,
+          max_tokens: openAiSettings.maxTokens || 500,
+          temperature: openAiSettings.temperature || 0.7
+        });
+        console.log(`✅ Fallback Groq Response Success - Ticket: ${ticketId}, Model: ${fallbackModel}`);
+        const content = chatCompletion.choices[0]?.message?.content || '';
+        updateStats('groq', true, Date.now() - startTime);
+        return content;
+      } catch (fallbackErr) {
+        console.error(`❌ Fallback Groq também falhou (ticket ${ticketId})`, fallbackErr);
+      }
+    }
     
     // Re-throw with enhanced error information
     if (error.message?.includes('API key')) {
@@ -1123,12 +1191,11 @@ export const handleOpenAi = async (
   ].includes(openAiSettings.model);
   
   // Sistema de rotação inteligente quando GROQ é selecionado
-  const isGroqModel = openAiSettings.model === 'GROQ' || [
-    "llama3-8b-8192", "llama3-70b-8192", "mixtral-8x7b-32768",
-    "gemma-7b-it", "gemma2-9b-it", "llama-3.1-8b-instant",
-    "llama-3.1-70b-versatile", "llama-3.2-1b-preview", "llama-3.2-3b-preview",
-    "llama-3.2-11b-text-preview", "llama-3.2-90b-text-preview"
-  ].includes(openAiSettings.model);
+  const groqModels = await fetchGroqModels(openAiSettings.apiKey || openAiSettings.openAiApiKey || "");
+  const isGroqModel = openAiSettings.model === 'GROQ' || groqModels.includes(openAiSettings.model);
+  if (openAiSettings.model === 'GROQ' && !groqModels.length) {
+    throw new Error('Alias "GROQ" usado, mas lista dinâmica retornou vazia. Verifique a GROQ_API_KEY ou defina um modelo explícito.');
+  }
 
   console.log(`🤖 Provider: ${isGroqModel ? 'GROQ (Rotação Inteligente)' : isOpenAIModel ? 'OpenAI' : 'Modelo Customizado'} | Ticket: ${ticket.id}`);
 

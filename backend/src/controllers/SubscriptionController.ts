@@ -67,20 +67,26 @@ export const createSubscription = async (
 ): Promise<Response> => {
   const { companyId } = req.user;
 
-  // Schema de validação
+  // Schema de validação (agora com mensagens explícitas)
   const schema = Yup.object().shape({
-    price: Yup.string().required(),
-    users: Yup.string().required(),
-    connections: Yup.string().required()
+    price: Yup.mixed().test('is-number-string', 'price deve ser número ou string numérica', v => v !== undefined && v !== null && /^\d+(\.\d+)?$/.test(String(v))).required('price é obrigatório'),
+    users: Yup.mixed().required('users é obrigatório'),
+    connections: Yup.mixed().required('connections é obrigatório'),
+    invoiceId: Yup.mixed().notRequired()
   });
 
-  // Validação do payload
-  if (!(await schema.isValid(req.body))) {
-    throw new AppError("Validation fails", 400);
+  try {
+    await schema.validate(req.body, { abortEarly: false });
+  } catch (validationErr: any) {
+    const details = validationErr.errors?.join('; ') || 'payload inválido';
+    throw new AppError(`Validation fails: ${details}`, 400);
   }
 
   const { price, invoiceId } = req.body;
-  const unitPrice = parseFloat(price);
+  const unitPrice = Number(price);
+  if (Number.isNaN(unitPrice) || unitPrice <= 0) {
+    throw new AppError('price inválido (deve ser > 0)', 400);
+  }
 
   // Dados para criar a preferência de pagamento
   const data = {
@@ -183,8 +189,9 @@ export const webhook = async (
             expiresAt.setDate(expiresAt.getDate() + 30);
             const newDueDate = expiresAt.toISOString().split("T")[0];
 
-            await company.update({ dueDate: newDueDate });
-            await invoice.update({ status: "paid" });
+            // Casting to any due to sequelize-typescript Model generic typing mismatch
+            await (company as any).update({ dueDate: newDueDate });
+            await (invoice as any).update({ status: "paid" });
 
             console.log("🏢 Empresa atualizada - Nova data de vencimento:", newDueDate);
 
@@ -292,8 +299,8 @@ export const setMercadoPagoToken = async (req: Request, res: Response): Promise<
       }
     });
     
-    if (!setting.isNewRecord) {
-      await setting.update({ value: token });
+    if (!(setting as any).isNewRecord) {
+      await (setting as any).update({ value: token });
     }
     
     console.log("✅ Token salvo com sucesso!");

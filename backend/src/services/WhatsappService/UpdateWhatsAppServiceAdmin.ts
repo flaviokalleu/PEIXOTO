@@ -119,13 +119,13 @@ const UpdateWhatsAppServiceAdmin = async ({
       }
     });
     if (oldDefaultWhatsapp) {
-      await oldDefaultWhatsapp.update({ isDefault: false });
+      await (oldDefaultWhatsapp as any).update({ isDefault: false });
     }
   }
 
   const whatsapp = await ShowWhatsAppServiceAdmin(whatsappId);
 
-  await whatsapp.update({
+  await (whatsapp as any).update({
     name,
     status,
     session,

@@ -1,8 +1,11 @@
 import Whatsapp from "../models/Whatsapp";
 import GetWhatsappWbot from "./GetWhatsappWbot";
-import fs from "fs";
+// Note: interactive buttons typings in Baileys sometimes lag behind features.
+// We cast the message content to any when adding buttons to avoid TS errors
+// if the installed version's AnyMessageContent lacks these fields.
+import fs from "fs"; // (kept in case future media usage is added)
 
-import { getMessageOptions } from "../services/WbotServices/SendWhatsAppMedia";
+import { getMessageOptions } from "../services/WbotServices/SendWhatsAppMedia"; // (unused here but kept for consistency)
 
 export type MessageData = {
   number: number | string;
@@ -22,15 +25,37 @@ export const SendMessageFlow = async (
 
     let message;
 
-    const templateButtons = [
-      {index: 1, urlButton: {displayText: '⭐ Star Baileys on GitHub!', url: 'https://github.com/adiwajshing/Baileys'}},
-      {index: 2, callButton: {displayText: 'Call me!+1 (234) 5678-901'}},
-      {index: 3, quickReplyButton: {displayText: 'This is a reply, just like normal buttons!', id: 'id-like-buttons-message'}},
-  ]
-    
+    const buttons = [
+      {
+        buttonId: "id1",
+        buttonText: { displayText: "⭐ Star Baileys on GitHub!" },
+        type: 1
+      },
+      {
+        buttonId: "id2",
+        buttonText: { displayText: "Call me!" },
+        type: 1
+      },
+      {
+        buttonId: "id3",
+        buttonText: {
+          displayText: "This is a reply, just like normal buttons!"
+        },
+        type: 1
+      }
+    ];
+
     const body = `\u200e${messageData.body}`;
-    message = await wbot.sendMessage(chatId, { text: body, templateButtons: templateButtons });
-    
+    // Using buttons message (cast to any for compatibility with current typings)
+    message = await wbot.sendMessage(
+      chatId,
+      {
+        text: body,
+        buttons,
+        headerType: 1
+      } as any
+    );
+
 
     return message;
   } catch (err: any) {

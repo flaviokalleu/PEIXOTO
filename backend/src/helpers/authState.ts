@@ -23,7 +23,7 @@ const authState = async (
 
   const saveState = async () => {
     try {
-      await whatsapp.update({
+      await (whatsapp as any).update({
         session: JSON.stringify({ creds, keys }, BufferJSON.replacer, 0)
       });
     } catch (error) {

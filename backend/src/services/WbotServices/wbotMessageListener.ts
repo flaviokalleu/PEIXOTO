@@ -4702,7 +4702,11 @@ const verifyCampaignMessageAndCloseTicket = async (
       messageRecord !== null
     ) {
       const ticket = await Ticket.findByPk(messageRecord.ticketId);
-      await ticket.update({ status: "closed", amountUsedBotQueues: 0 });
+      await Ticket.update(
+        { status: "closed", amountUsedBotQueues: 0 },
+        { where: { id: ticket.id } }
+      );
+      await ticket.reload();
 
       io.of(String(companyId))
         // .to("open")
@@ -4736,7 +4740,7 @@ const filterMessages = (msg: WAMessage): boolean => {
       WAMessageStubType.E2E_DEVICE_CHANGED,
       WAMessageStubType.E2E_IDENTITY_CHANGED,
       WAMessageStubType.CIPHERTEXT
-    ].includes(msg.messageStubType as WAMessageStubType)
+    ].includes(msg.messageStubType)
   )
     return false;
 

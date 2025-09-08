@@ -159,7 +159,7 @@ const CreateWhatsAppService = async ({
       where: { isDefault: true, companyId, channel: channel }
     });
     if (oldDefaultWhatsapp) {
-      await oldDefaultWhatsapp.update({ isDefault: false, companyId });
+      await (oldDefaultWhatsapp as any).update({ isDefault: false, companyId });
     }
   }
 

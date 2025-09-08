@@ -176,23 +176,44 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
         wsocket = makeWASocket({
           logger: loggerBaileys,
           printQRInTerminal: false,
-          auth: {
+            auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, logger),
           },
           version,
           browser: Browsers.appropriate("Desktop"),
-          defaultQueryTimeoutMs: undefined,
+          // Allow overriding query timeout via env (mitigates 'Timed Out' during init queries)
+          defaultQueryTimeoutMs: Number(process.env.WA_QUERY_TIMEOUT_MS || 120_000),
           msgRetryCounterCache,
           markOnlineOnConnect: false,
-          connectTimeoutMs: 25_000,
-          retryRequestDelayMs: 500,
+          connectTimeoutMs: Number(process.env.WA_CONNECT_TIMEOUT_MS || 30_000),
+          retryRequestDelayMs: 1000,
           getMessage: msgDB.get,
           emitOwnEvents: true,
-          fireInitQueries: true,
+          // Can disable initial heavy queries if they time out repeatedly
+          fireInitQueries: process.env.WA_FIRE_INIT_QUERIES !== "false",
           transactionOpts: { maxCommitRetries: 10, delayBetweenTriesMs: 3000 },
           shouldIgnoreJid: jid => isJidBroadcast(jid),
+          // Additional timeout configurations
+          qrTimeout: Number(process.env.WA_QR_TIMEOUT_MS || 45_000),
+          syncFullHistory: false, // Disable full history sync to reduce initial load
         });
+
+        // Handle unhandled promise rejections from Baileys socket operations
+        // Note: Baileys doesn't expose 'error' event directly, so we'll handle at process level
+
+        // Add specific handler for timeout errors
+        const handleTimeoutError = (error: any) => {
+          if (error?.message?.includes('Timed Out') || error?.output?.statusCode === 408) {
+            logger.warn(`WhatsApp socket timeout for ${name}. This is often normal during heavy operations.`);
+            // Don't crash the process for timeout errors
+            return;
+          }
+          logger.error('Unhandled WhatsApp socket error:', error);
+        };
+
+        // Note: This is a global handler, consider using a more targeted approach if needed
+        process.on('unhandledRejection', handleTimeoutError);
 
         wsocket.ev.on(
           "connection.update",
@@ -203,7 +224,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
             if (connection === "close") {
               if (disconect === 403) {
-                await whatsapp.update({ status: "PENDING", session: "", number: "" });
+                await (whatsapp as any).update({ status: "PENDING", session: "", number: "" });
                 removeWbot(id, false);
 
                 await DeleteBaileysService(whatsapp.id);
@@ -218,7 +239,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 removeWbot(id, false);
                 setTimeout(() => StartWhatsAppSession(whatsapp, whatsapp.companyId), 2000);
               } else {
-                await whatsapp.update({ status: "PENDING", session: "", number: "" });
+                await (whatsapp as any).update({ status: "PENDING", session: "", number: "" });
                 await DeleteBaileysService(whatsapp.id);
 
                 io.emit(`company-${whatsapp.companyId}-whatsappSession`, {
@@ -231,7 +252,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
             }
 
             if (connection === "open") {
-              await whatsapp.update({
+              await (whatsapp as any).update({
                 status: "CONNECTED",
                 qrcode: "",
                 retries: 0,
@@ -259,7 +280,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
 
             if (qr !== undefined) {
               if (retriesQrCodeMap.get(id) && retriesQrCodeMap.get(id) >= 3) {
-                await whatsapp.update({
+                await (whatsapp as any).update({
                   status: "DISCONNECTED",
                   qrcode: ""
                 });
@@ -277,7 +298,7 @@ export const initWASocket = async (whatsapp: Whatsapp): Promise<Session> => {
                 logger.info(`Session QRCode Generate ${name}`);
                 retriesQrCodeMap.set(id, (retriesQrCode += 1));
 
-                await whatsapp.update({
+                await (whatsapp as any).update({
                   qrcode: qr,
                   status: "qrcode",
                   retries: 0,

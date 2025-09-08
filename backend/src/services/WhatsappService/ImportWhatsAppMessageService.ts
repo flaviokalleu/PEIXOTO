@@ -31,7 +31,7 @@ export const closeTicketsImported = async (whatsappId) => {
     await UpdateTicketService({ ticketData: { status: "closed" }, ticketId: ticket.id, companyId: ticket.companyId })
   }
   let whatsApp = await Whatsapp.findByPk(whatsappId);
-  whatsApp.update({ statusImportMessages: null })
+  (whatsApp as any).update({ statusImportMessages: null })
   const io = getIO();
   io.of(whatsApp.companyId.toString())
     .emit(`importMessages-${whatsApp.companyId}`, {
@@ -120,7 +120,7 @@ Mensagem ${i + 1} de ${qtd}
           if (whatsApp.closedTicketsPostImported) {
             await closeTicketsImported(whatsappId)
           }
-          await whatsApp.update({
+          await (whatsApp as any).update({
             statusImportMessages: whatsApp.closedTicketsPostImported ? null : "renderButtonCloseTickets",
             importOldMessages: null,
             importRecentMessages: null
