@@ -46,6 +46,7 @@ import flowDefaultRoutes from "./flowDefaultRoutes";
 import webHook from "./webHookRoutes";
 import flowBuilder from "./flowBuilderRoutes";
 import flowCampaignRoutes from "./flowCampaignRoutes";
+import mediaRoutes from "./mediaRoutes";
 
 const routes = Router();
 
@@ -92,6 +93,7 @@ routes.use(flowDefaultRoutes);
 routes.use(webHook);
 routes.use(flowBuilder);
 routes.use(flowCampaignRoutes);
+routes.use(mediaRoutes);
 
 routes.use(promptRoutes);
 routes.use(statisticsRoutes);

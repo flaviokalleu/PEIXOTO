@@ -84,6 +84,7 @@ import pino from "pino";
 import BullQueues from "../../libs/queue";
 import { Transform } from "stream";
 import { msgDB } from "../../libs/wbot";
+import { ensureCompanyMediaDir, generateSafeFilename, writeMediaFile } from "../../helpers/media";
 import {CheckSettings1, CheckCompanySetting} from "../../helpers/CheckSettings";
 import { title } from "process";
 import { FlowBuilderModel } from "../../models/FlowBuilder";
@@ -974,16 +975,17 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
     msg.message?.interactiveMessage?.header?.documentMessage ||
     msg.message?.interactiveMessage?.header?.videoMessage;
 
+  // Defensive mimetype
+  const mime = (mineType && mineType.mimetype) ? mineType.mimetype : "application/octet-stream";
   if (!filename) {
-    const ext = mineType.mimetype.split("/")[1].split(";")[0];
-    filename = `${new Date().getTime()}.${ext}`;
+    filename = generateSafeFilename(undefined, mime);
   } else {
-    filename = `${new Date().getTime()}_${filename}`;
+    filename = generateSafeFilename(filename, mime);
   }
 
   const media = {
     data: buffer,
-    mimetype: mineType.mimetype,
+  mimetype: mime,
     filename
   };
 
@@ -996,12 +998,6 @@ const verifyContact = async (
   companyId: number
 ): Promise<Contact> => {
   let profilePicUrl: string = "";
-  // try {
-  //   profilePicUrl = await wbot.profilePictureUrl(msgContact.id, "image");
-  // } catch (e) {
-  //   Sentry.captureException(e);
-  //   profilePicUrl = `${process.env.FRONTEND_URL}/nopicture.png`;
-  // }
 
   const contactData = {
     name: msgContact.name || msgContact.id.replace(/\D/g, ""),
@@ -1019,7 +1015,6 @@ const verifyContact = async (
   }
 
   const contact = await CreateOrUpdateContactService(contactData);
-
   return contact;
 };
 
@@ -1028,15 +1023,9 @@ const verifyQuotedMessage = async (
 ): Promise<Message | null> => {
   if (!msg) return null;
   const quoted = getQuotedMessageId(msg);
-
   if (!quoted) return null;
-
-  const quotedMsg = await Message.findOne({
-    where: { wid: quoted }
-  });
-
+  const quotedMsg = await Message.findOne({ where: { wid: quoted } });
   if (!quotedMsg) return null;
-
   return quotedMsg;
 };
 
@@ -1118,74 +1107,30 @@ export const verifyMediaMessage = async (
 
     //   media.filename = `${name.trim()}_${new Date().getTime()}.${ext}`;
     // }
-    if (!media.filename) {
-      const ext = media.mimetype.split("/")[1].split(";")[0];
-      media.filename = `${new Date().getTime()}.${ext}`;
-    } else {
-      // ext = tudo depois do ultimo .
-      const ext = media.filename.split(".").pop();
-      // name = tudo antes do ultimo .
-      const name = media.filename
-        .split(".")
-        .slice(0, -1)
-        .join(".")
-        .replace(/\s/g, "_")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "");
-      media.filename = `${name.trim()}_${new Date().getTime()}.${ext}`;
-    }
+    // downloadMedia already generated a safe filename; skip renaming
 
     try {
-      const folder = path.resolve(
-        __dirname,
-        "..",
-        "..",
-        "..",
-        "public",
-        `company${companyId}`
-      );
-
-      // const folder = `public/company${companyId}`; // Correção adicionada por Altemir 16-08-2023
-      if (!fs.existsSync(folder)) {
-        fs.mkdirSync(folder, { recursive: true }); // Correção adicionada por Altemir 16-08-2023
-        fs.chmodSync(folder, 0o777);
+      const folder = ensureCompanyMediaDir(companyId);
+      const absFile = join(folder, media.filename);
+      await writeMediaFile(absFile, media.data as any);
+      if (media.mimetype.includes("audio")) {
+        const inputFile = absFile;
+        let outputFile: string | null = null;
+        if (inputFile.endsWith(".mpeg")) {
+          outputFile = inputFile.replace(".mpeg", ".mp3");
+        } else if (inputFile.endsWith(".ogg")) {
+          outputFile = inputFile.replace(".ogg", ".mp3");
+        }
+        if (outputFile) {
+          await new Promise<void>((resolve, reject) => {
+            ffmpeg(inputFile)
+              .toFormat("mp3")
+              .save(outputFile as string)
+              .on("end", () => resolve())
+              .on("error", err => reject(err));
+          });
+        }
       }
-
-      await writeFileAsync(
-        join(folder, media.filename),
-        media.data.toString("base64"),
-        "base64"
-      ) // Correção adicionada por Altemir 16-08-2023
-        .then(() => {
-          // console.log("Arquivo salvo com sucesso!");
-          if (media.mimetype.includes("audio")) {
-            console.log(media.mimetype);
-            const inputFile = path.join(folder, media.filename);
-            let outputFile: string;
-
-            if (inputFile.endsWith(".mpeg")) {
-              outputFile = inputFile.replace(".mpeg", ".mp3");
-            } else if (inputFile.endsWith(".ogg")) {
-              outputFile = inputFile.replace(".ogg", ".mp3");
-            } else {
-              // Trate outros formatos de arquivo conforme necessário
-              //console.error("Formato de arquivo não suportado:", inputFile);
-              return;
-            }
-
-            return new Promise<void>((resolve, reject) => {
-              ffmpeg(inputFile)
-                .toFormat("mp3")
-                .save(outputFile)
-                .on("end", () => {
-                  resolve();
-                })
-                .on("error", (err: any) => {
-                  reject(err);
-                });
-            });
-          }
-        });
       // .then(() => {
       //   //console.log("Conversão concluída!");
       //   // Aqui você pode fazer o que desejar com o arquivo MP3 convertido.
