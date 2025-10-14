@@ -121,7 +121,13 @@ const typebotListener = async ({
         //let body = getConversationMessage(msg);
 
 
-        if (body.toLocaleLowerCase().trim() !== typebotKeywordFinish.toLocaleLowerCase().trim() && body.toLocaleLowerCase().trim() !== typebotKeywordRestart.toLocaleLowerCase().trim()) {
+        if (!body) {
+            body = ""; // evita crash e permite seguir para mensagens desconhecidas
+        }
+        const bodyLower = body.toLocaleLowerCase().trim();
+        const finishLower = (typebotKeywordFinish || "").toLocaleLowerCase().trim();
+        const restartLower = (typebotKeywordRestart || "").toLocaleLowerCase().trim();
+        if (bodyLower !== finishLower && bodyLower !== restartLower) {
             let requestContinue
             let messages
             let input
@@ -401,7 +407,7 @@ const typebotListener = async ({
                 }
             }
         }
-        if (body.toLocaleLowerCase().trim() === typebotKeywordRestart.toLocaleLowerCase().trim()) {
+    if ((body || "").toLocaleLowerCase().trim() === (typebotKeywordRestart || "").toLocaleLowerCase().trim()) {
             await ticket.update({
                 isBot: true,
                 typebotSessionId: null
@@ -413,7 +419,7 @@ const typebotListener = async ({
             await wbot.sendMessage(`${number}@c.us`, { text: typebotRestartMessage })
 
         }
-        if (body.toLocaleLowerCase().trim() === typebotKeywordFinish.toLocaleLowerCase().trim()) {
+    if ((body || "").toLocaleLowerCase().trim() === (typebotKeywordFinish || "").toLocaleLowerCase().trim()) {
             await UpdateTicketService({
                 ticketData: {
                     status: "closed",

@@ -1,4 +1,4 @@
-import { WAMessage, AnyMessageContent } from "@whiskeysockets/baileys";
+import { WAMessage, AnyMessageContent, getDevice } from "@whiskeysockets/baileys";
 import * as Sentry from "@sentry/node";
 import fs, { unlink, unlinkSync } from "fs";
 import { exec } from "child_process";
@@ -9,6 +9,7 @@ import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
 import mime from "mime-types";
 import Contact from "../../models/Contact";
+import Message from "../../models/Message";
 import { getWbot } from "../../libs/wbot";
 import CreateMessageService from "../MessageServices/CreateMessageService";
 import formatBody from "../../helpers/Mustache";
@@ -41,9 +42,24 @@ const processAudio = async (audio: string, companyId: string): Promise<string> =
   
   return new Promise((resolve, reject) => {
     exec(
-      `${ffmpegPath.path} -i ${audio} -af "afftdn=nr=5:nf=-40, highpass=f=100, lowpass=f=4000, dynaudnorm=f=1000, aresample=44100, volume=1.0" -vn -ar 44100 -ac 2 -b:a 256k ${outputAudio} -y`,
+      `"${ffmpegPath.path}" -i "${audio}" -af "afftdn=nr=5:nf=-40, highpass=f=100, lowpass=f=4000, dynaudnorm=f=1000, aresample=44100, volume=1.0" -vn -ar 44100 -ac 2 -b:a 256k "${outputAudio}" -y`,
       (error, _stdout, _stderr) => {
         if (error) reject(error);
+        resolve(outputAudio);
+      }
+    );
+  });
+};
+
+// Converte para OGG OPUS para melhor compatibilidade com Android (PTT)
+const processAudioToOgg = async (audio: string, companyId: string): Promise<string> => {
+  const outputAudio = `${publicFolder}/company${companyId}/${new Date().getTime()}.ogg`;
+  return new Promise((resolve, reject) => {
+    // 48kHz, mono, libopus, bitrate 32-64k é suficiente p/ voz
+    exec(
+      `"${ffmpegPath.path}" -i "${audio}" -af "highpass=f=100, lowpass=f=4000, dynaudnorm=f=1000" -vn -ar 48000 -ac 1 -c:a libopus -b:a 48k "${outputAudio}" -y`,
+      (error, _stdout, _stderr) => {
+        if (error) return reject(error);
         resolve(outputAudio);
       }
     );
@@ -88,21 +104,15 @@ export const getMessageOptions = async (
         // gifPlayback: true
       };
     } else if (typeMessage === "audio") {
-      const typeAudio = true; //fileName.includes("audio-record-site");
-      const convert = await processAudio(pathMedia, companyId);
-      if (typeAudio) {
-        options = {
-          audio: fs.readFileSync(convert),
-          mimetype: "audio/mp4",
-          ptt: true
-        };
-      } else {
-        options = {
-          audio: fs.readFileSync(convert),
-          mimetype: typeAudio ? "audio/mp4" : mimeType,
-          ptt: true
-        };
-      }
+      // Sempre enviar como PTT e preferir OGG/OPUS para compatibilidade (Android/iOS)
+      const oggPath = await processAudioToOgg(pathMedia, companyId);
+      const buffer = fs.readFileSync(oggPath);
+      try { unlinkSync(oggPath); } catch {}
+      options = {
+        audio: buffer,
+        mimetype: "audio/ogg; codecs=opus",
+        ptt: true
+      };
     } else if (typeMessage === "document") {
       options = {
         document: fs.readFileSync(pathMedia),
@@ -149,6 +159,28 @@ const SendWhatsAppMedia = async ({
     let bodyTicket = "";
     const bodyMedia = ticket ? formatBody(body, ticket) : body;
 
+    // Determine destinatário (JID) antes para detectar dispositivo
+    const contactNumber = await Contact.findByPk(ticket.contactId)
+    let number: string;
+    if (contactNumber.remoteJid && contactNumber.remoteJid !== "" && contactNumber.remoteJid.includes("@")) {
+      number = contactNumber.remoteJid;
+    } else {
+      number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"}`;
+    }
+    // Detecta dispositivo (Android/iOS/Web) com base na última mensagem recebida do contato
+    let targetDevice: string = "unknown";
+    try {
+      const lastInbound = await Message.findOne({
+        where: { ticketId: ticket.id, fromMe: false },
+        order: [["createdAt", "DESC"]]
+      });
+      const lastWid = lastInbound?.get?.("wid") || (lastInbound as any)?.wid;
+      if (lastWid) {
+        const d = (getDevice as any)?.(lastWid);
+        if (typeof d === "string") targetDevice = d.toLowerCase();
+      }
+    } catch { /* ignore */ }
+
     // console.log(media.mimetype)
     if (typeMessage === "video") {
       options = {
@@ -159,24 +191,37 @@ const SendWhatsAppMedia = async ({
       };
       bodyTicket = "🎥 Arquivo de vídeo"
     } else if (typeMessage === "audio") {
-      
-      const typeAudio = true; //media.originalname.includes("audio-record-site");
-      if (typeAudio) {
-        const convert = await processAudio(media.path, companyId);
-        options = {
-          audio: fs.readFileSync(convert),
-          mimetype: "audio/mpeg",
-          ptt: true,
-          caption: bodyMedia,
-          contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
-        };
-        unlinkSync(convert);
+      // Se destino for Android, preferir OGG OPUS
+      if (targetDevice === "unknown" || targetDevice.includes("android")) {
+        try {
+          const oggPath = await processAudioToOgg(media.path, companyId);
+          options = {
+            audio: fs.readFileSync(oggPath),
+            mimetype: "audio/ogg; codecs=opus",
+            ptt: true,
+            caption: bodyMedia,
+            contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+          };
+          unlinkSync(oggPath);
+        } catch (e) {
+          // fallback para MP3 se falhar
+          const convert = await processAudio(media.path, companyId);
+          options = {
+            audio: fs.readFileSync(convert),
+            mimetype: "audio/mpeg",
+            ptt: true,
+            caption: bodyMedia,
+            contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
+          };
+          unlinkSync(convert);
+        }
       } else {
         const convert = await processAudio(media.path, companyId);
         options = {
           audio: fs.readFileSync(convert),
           mimetype: "audio/mpeg",
           ptt: true,
+          caption: bodyMedia,
           contextInfo: { forwardingScore: isForwarded ? 2 : 0, isForwarded: isForwarded },
         };
         unlinkSync(convert);
@@ -242,17 +287,6 @@ const SendWhatsAppMedia = async ({
       await CreateMessageService({ messageData, companyId: ticket.companyId });
 
       return
-    }
-
-    const contactNumber = await Contact.findByPk(ticket.contactId)
-
-    let number: string;
-
-    if (contactNumber.remoteJid && contactNumber.remoteJid !== "" && contactNumber.remoteJid.includes("@")) {
-      number = contactNumber.remoteJid;
-    } else {
-      number = `${contactNumber.number}@${ticket.isGroup ? "g.us" : "s.whatsapp.net"
-        }`;
     }
 
     const sentMessage = await wbot.sendMessage(

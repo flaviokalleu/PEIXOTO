@@ -679,6 +679,18 @@ const getMeSocket = (wbot: Session): IMe => {
   };
 };
 
+// Normaliza remoteJid tratando contatos que usam @lid: quando houver senderPn, use-o
+const normalizeRemoteJid = (msg: proto.IWebMessageInfo): string => {
+  const rjid = msg.key.remoteJid || "";
+  if (rjid.endsWith("@lid")) {
+    const senderPn = (msg.key as any)?.senderPn;
+    if (senderPn && typeof senderPn === "string" && senderPn.includes("@")) {
+      return senderPn;
+    }
+  }
+  return rjid;
+};
+
 const getSenderMessage = (
   msg: proto.IWebMessageInfo,
   wbot: Session
@@ -686,22 +698,23 @@ const getSenderMessage = (
   const me = getMeSocket(wbot);
   if (msg.key.fromMe) return me.id;
 
-  const senderId =
-    msg.participant || msg.key.participant || msg.key.remoteJid || undefined;
+  const normalized = normalizeRemoteJid(msg);
+  const senderId = msg.participant || msg.key.participant || normalized || undefined;
 
   return senderId && jidNormalizedUser(senderId);
 };
 
 const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
-  const isGroup = msg.key.remoteJid.includes("g.us");
-  const rawNumber = msg.key.remoteJid.replace(/\D/g, "");
+  const normalized = normalizeRemoteJid(msg);
+  const isGroup = normalized.includes("g.us");
+  const rawNumber = normalized.replace(/\D/g, "");
   return isGroup
     ? {
         id: getSenderMessage(msg, wbot),
         name: msg.pushName
       }
     : {
-        id: msg.key.remoteJid,
+        id: normalized,
         name: msg.key.fromMe ? rawNumber : msg.pushName
       };
 };
@@ -992,6 +1005,17 @@ const downloadMedia = async (msg: proto.IWebMessageInfo, isImported: Date = null
   return media;
 };
 
+// Classifica tipo de mídia para front: somente image | video | audio, resto => document
+function classifyMediaType(mimetype: string): string {
+  const lower = (mimetype || "").toLowerCase();
+  if (lower.startsWith("image/")) return "image";
+  if (lower.startsWith("video/")) return "video";
+  if (lower.startsWith("audio/")) return "audio";
+  // Trata stickers como image
+  if (lower.includes("webp") || lower.includes("sticker")) return "image";
+  return "document";
+}
+
 const verifyContact = async (
   msgContact: IMe,
   wbot: Session,
@@ -1163,13 +1187,13 @@ export const verifyMediaMessage = async (
       fromMe: msg.key.fromMe,
       read: msg.key.fromMe,
       mediaUrl: media.filename,
-      mediaType: media.mimetype.split("/")[0],
+  mediaType: classifyMediaType(media.mimetype),
       quotedMsgId: quotedMsg?.id,
       ack:
         Number(
           String(msg.status).replace("PENDING", "2").replace("NaN", "1")
         ) || 2,
-      remoteJid: msg.key.remoteJid,
+  remoteJid: normalizeRemoteJid(msg),
       participant: msg.key.participant,
       dataJson: JSON.stringify(msg),
       ticketTrakingId: ticketTraking?.id,
@@ -1294,7 +1318,7 @@ export const verifyMessage = async (
       ack:
         Number(String(msg.status).replace("PENDING", "2").replace("NaN", "1")) ||
         2,
-      remoteJid: msg.key.remoteJid,
+  remoteJid: normalizeRemoteJid(msg),
       participant: msg.key.participant,
       dataJson: JSON.stringify(msg),
       ticketTrakingId: ticketTraking?.id,
@@ -2701,7 +2725,7 @@ const flowbuilderIntegration = async (
     read: msg.key.fromMe,
     quotedMsgId: quotedMsg?.id,
     ack: Number(String(msg.status).replace('PENDING', '2').replace('NaN', '1')) || 2,
-    remoteJid: msg.key.remoteJid,
+  remoteJid: normalizeRemoteJid(msg),
     participant: msg.key.participant,
     dataJson: JSON.stringify(msg),
     createdAt: new Date(
