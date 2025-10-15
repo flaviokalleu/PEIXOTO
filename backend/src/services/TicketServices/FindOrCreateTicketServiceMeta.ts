@@ -5,6 +5,8 @@ import Ticket from "../../models/Ticket";
 import ShowTicketService from "./ShowTicketService";
 import FindOrCreateATicketTrakingService from "./FindOrCreateATicketTrakingService";
 import Setting from "../../models/Setting";
+import AutoDistributeQueue from "../../helpers/AutoDistributeQueue";
+import CreateLogTicketService from "./CreateLogTicketService";
 
 interface TicketData {
   status?: string;
@@ -95,6 +97,11 @@ const FindOrCreateTicketServiceMeta = async (
   }
 
   if (!ticket) {
+    // Distribui automaticamente para uma fila
+    const autoQueueId = await AutoDistributeQueue({ 
+      companyId 
+    });
+
     ticket = await Ticket.create({
       contactId: contact.id,
       status: "pending",
@@ -103,7 +110,8 @@ const FindOrCreateTicketServiceMeta = async (
       whatsappId,
       companyId,
       channel,
-      isActiveDemand: false
+      isActiveDemand: false,
+      queueId: autoQueueId
     });
 
     await FindOrCreateATicketTrakingService({
@@ -113,8 +121,35 @@ const FindOrCreateTicketServiceMeta = async (
       userId: ticket.userId
     });
 
+    if (autoQueueId) {
+      await CreateLogTicketService({
+        ticketId: ticket.id,
+        queueId: autoQueueId,
+        type: "queue"
+      });
+      console.log(`[FindOrCreateTicketServiceMeta] Ticket ${ticket.id} distribuído automaticamente para fila ${autoQueueId}`);
+    }
+
   } else {
     await ticket.update({ whatsappId });
+    
+    // Se o ticket existente não tem fila, distribui automaticamente
+    if (!ticket.queueId) {
+      const autoQueueId = await AutoDistributeQueue({ 
+        companyId,
+        ticketId: ticket.id 
+      });
+      
+      if (autoQueueId) {
+        await ticket.update({ queueId: autoQueueId });
+        await CreateLogTicketService({
+          ticketId: ticket.id,
+          queueId: autoQueueId,
+          type: "queue"
+        });
+        console.log(`[FindOrCreateTicketServiceMeta] Ticket ${ticket.id} existente distribuído automaticamente para fila ${autoQueueId}`);
+      }
+    }
   }
 
   ticket = await ShowTicketService(ticket.id, companyId);

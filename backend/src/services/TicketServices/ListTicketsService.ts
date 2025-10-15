@@ -80,11 +80,21 @@ const ListTicketsService = async ({
   const showNotificationPendingValue = showPendingNotification[0].showNotificationPending;
     let whereCondition: Filterable["where"];
 
-  whereCondition = {
-    [Op.or]: [{ userId }, { status: "pending" }],
-    queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
-    companyId
-  };
+  // Usuários comuns só veem tickets vinculados a eles ou abertos por eles
+  if (user.profile === "user") {
+    whereCondition = {
+      userId: userId, // Apenas tickets do próprio usuário
+      queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
+      companyId
+    };
+  } else {
+    // Administradores veem todos os tickets da fila
+    whereCondition = {
+      [Op.or]: [{ userId }, { status: "pending" }],
+      queueId: showTicketWithoutQueue ? { [Op.or]: [queueIds, null] } : { [Op.or]: [queueIds] },
+      companyId
+    };
+  }
 
 
   let includeCondition: Includeable[];
@@ -141,46 +151,9 @@ const ListTicketsService = async ({
           queueId: { [Op.or]: [queueIds, null] },
         };
       }
-      else
-        if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
-          const TicketsUserFilter: any[] | null = [];
-
-          let ticketsIds = [];
-
-          if (!showTicketAllQueues) {
-            ticketsIds = await Ticket.findAll({
-              where: {
-                userId: { [Op.or]: [user.id, null] },
-                queueId: { [Op.or]: [queueIds, null] },
-                status: "pending",
-                companyId
-              },
-            });
-          } else {
-            ticketsIds = await Ticket.findAll({
-              where: {
-                userId: { [Op.or]: [user.id, null] },
-                // queueId: { [Op.or]: [queueIds, null] },
-                status: "pending",
-                companyId
-              },
-            });
-          }
-
-          if (ticketsIds) {
-            TicketsUserFilter.push(ticketsIds.map(t => t.id));
-          }
-          // }
-
-          const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
-
-          whereCondition = {
-            ...whereCondition,
-            id: ticketsIntersection
-          };
-        }
         else
-          if (user.profile === "user" && status === "pending" && !showTicketWithoutQueue) {
+          if (user.profile === "user" && status === "pending" && showTicketWithoutQueue) {
+            // Usuários comuns só veem tickets pendentes vinculados a eles
             const TicketsUserFilter: any[] | null = [];
 
             let ticketsIds = [];
@@ -188,31 +161,22 @@ const ListTicketsService = async ({
             if (!showTicketAllQueues) {
               ticketsIds = await Ticket.findAll({
                 where: {
-                  companyId,
-                  userId:
-                    { [Op.or]: [user.id, null] },
+                  userId: user.id, // Apenas tickets vinculados ao usuário
+                  queueId: { [Op.or]: [queueIds, null] },
                   status: "pending",
-                  queueId: { [Op.in]: queueIds }
+                  companyId
                 },
               });
             } else {
               ticketsIds = await Ticket.findAll({
                 where: {
-                  companyId,
-                  [Op.or]:
-                    [{
-                      userId:
-                        { [Op.or]: [user.id, null] }
-                    },
-                    {
-                      status: "pending"
-                    }
-                    ],
-                  // queueId: { [Op.in] : queueIds},
-                  status: "pending"
+                  userId: user.id, // Apenas tickets vinculados ao usuário
+                  status: "pending",
+                  companyId
                 },
               });
             }
+
             if (ticketsIds) {
               TicketsUserFilter.push(ticketsIds.map(t => t.id));
             }
@@ -225,8 +189,43 @@ const ListTicketsService = async ({
               id: ticketsIntersection
             };
           }
+          else
+            if (user.profile === "user" && status === "pending" && !showTicketWithoutQueue) {
+              // Usuários comuns só veem tickets pendentes vinculados a eles
+              const TicketsUserFilter: any[] | null = [];
 
-  if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {
+              let ticketsIds = [];
+
+              if (!showTicketAllQueues) {
+                ticketsIds = await Ticket.findAll({
+                  where: {
+                    companyId,
+                    userId: user.id, // Apenas tickets vinculados ao usuário
+                    status: "pending",
+                    queueId: { [Op.in]: queueIds }
+                  },
+                });
+              } else {
+                ticketsIds = await Ticket.findAll({
+                  where: {
+                    companyId,
+                    userId: user.id, // Apenas tickets vinculados ao usuário
+                    status: "pending"
+                  },
+                });
+              }
+              if (ticketsIds) {
+                TicketsUserFilter.push(ticketsIds.map(t => t.id));
+              }
+              // }
+
+              const ticketsIntersection: number[] = intersection(...TicketsUserFilter);
+
+              whereCondition = {
+                ...whereCondition,
+                id: ticketsIntersection
+              };
+            }  if (showAll === "true" && (user.profile === "admin" || user.allUserChat === "enabled") && status !== "search") {
     if (user.allHistoric === "enabled" && showTicketWithoutQueue) {
       whereCondition = { companyId };
     } else if (user.allHistoric === "enabled" && !showTicketWithoutQueue) {

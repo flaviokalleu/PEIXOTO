@@ -13,6 +13,7 @@ import CompaniesSettings from "../../models/CompaniesSettings";
 import CreateLogTicketService from "./CreateLogTicketService";
 import AppError from "../../errors/AppError";
 import UpdateTicketService from "./UpdateTicketService";
+import AutoDistributeQueue from "../../helpers/AutoDistributeQueue";
 
 // interface Response {
 //   ticket: Ticket;
@@ -179,6 +180,22 @@ const FindOrCreateTicketService = async (
   if (queueId != 0 && !isNil(queueId)) {
     //Determina qual a fila esse ticket pertence.
     await ticket.update({ queueId: queueId });
+  } else {
+    // Se o ticket não tem fila definida, faz a distribuição automática
+    const autoQueueId = await AutoDistributeQueue({ 
+      companyId, 
+      ticketId: ticket.id 
+    });
+    
+    if (autoQueueId) {
+      await ticket.update({ queueId: autoQueueId });
+      await CreateLogTicketService({
+        ticketId: ticket.id,
+        queueId: autoQueueId,
+        type: "queue"
+      });
+      console.log(`[FindOrCreateTicketService] Ticket ${ticket.id} distribuído automaticamente para fila ${autoQueueId}`);
+    }
   }
 
   if (userId != 0 && !isNil(userId)) {

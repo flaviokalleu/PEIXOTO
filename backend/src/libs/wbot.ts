@@ -10,7 +10,7 @@ import makeWASocket, {
   jidDecode,
   isJidGroup,
   isJidBroadcast,
-  isJidUser,
+  isLidUser,
   isJidStatusBroadcast,
   delay,
   WAMessageKey,

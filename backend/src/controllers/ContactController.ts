@@ -129,9 +129,14 @@ export const importXls = async (req: Request, res: Response): Promise<Response> 
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { searchParam, pageNumber, contactTag: tagIdsStringified, isGroup } = req.query as IndexQuery;
-  const { id: userId, companyId } = req.user;
+  const { id: userId, companyId, profile } = req.user;
 
   console.log("index", { companyId, userId, searchParam })
+
+  // Apenas administradores podem listar contatos
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   let tagsIds: number[] = [];
 
@@ -229,7 +234,12 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
 export const show = async (req: Request, res: Response): Promise<Response> => {
   const { contactId } = req.params;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
+
+  // Apenas administradores podem visualizar detalhes do contato
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   const contact = await ShowContactService(contactId, companyId);
 
@@ -306,7 +316,12 @@ export const remove = async (
 
 export const list = async (req: Request, res: Response): Promise<Response> => {
   const { name } = req.query as unknown as SearchContactParams;
-  const { companyId } = req.user;
+  const { companyId, profile } = req.user;
+
+  // Apenas administradores podem listar contatos
+  if (profile !== "admin") {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
 
   const contacts = await SimpleListService({ name, companyId });
 

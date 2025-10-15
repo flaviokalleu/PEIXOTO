@@ -682,12 +682,35 @@ const getMeSocket = (wbot: Session): IMe => {
 // Normaliza remoteJid tratando contatos que usam @lid: quando houver senderPn, use-o
 const normalizeRemoteJid = (msg: proto.IWebMessageInfo): string => {
   const rjid = msg.key.remoteJid || "";
+  
+  // Se o remoteJid termina com @lid, é um LID (Linked Identity)
+  // Precisamos usar o número real do remoteJidAlt, sender_pn ou participant
   if (rjid.endsWith("@lid")) {
-    const senderPn = (msg.key as any)?.senderPn;
+    // Prioridade 1: remoteJidAlt (campo mais confiável)
+    const remoteJidAlt = (msg.key as any)?.remoteJidAlt;
+    if (remoteJidAlt && typeof remoteJidAlt === "string" && remoteJidAlt.includes("@")) {
+      console.log(`[normalizeRemoteJid] ✅ Usando remoteJidAlt: ${remoteJidAlt} (LID: ${rjid})`);
+      return remoteJidAlt;
+    }
+    
+    // Prioridade 2: sender_pn das propriedades da mensagem
+    const senderPn = (msg as any)?.sender_pn;
     if (senderPn && typeof senderPn === "string" && senderPn.includes("@")) {
+      console.log(`[normalizeRemoteJid] ✅ Usando sender_pn: ${senderPn} (LID: ${rjid})`);
       return senderPn;
     }
+    
+    // Prioridade 3: participant da key (em grupos)
+    const participant = msg.key.participant;
+    if (participant && !participant.endsWith("@lid")) {
+      console.log(`[normalizeRemoteJid] ✅ Usando participant: ${participant} (LID: ${rjid})`);
+      return participant;
+    }
+    
+    // Log de erro se não conseguir resolver o LID
+    console.error(`[normalizeRemoteJid] ❌ Não foi possível resolver LID: ${rjid}. Msg:`, JSON.stringify(msg.key));
   }
+  
   return rjid;
 };
 
@@ -708,6 +731,10 @@ const getContactMessage = async (msg: proto.IWebMessageInfo, wbot: Session) => {
   const normalized = normalizeRemoteJid(msg);
   const isGroup = normalized.includes("g.us");
   const rawNumber = normalized.replace(/\D/g, "");
+  
+  // Log para debug
+  console.log(`[getContactMessage] normalized: ${normalized}, isGroup: ${isGroup}, fromMe: ${msg.key.fromMe}`);
+  
   return isGroup
     ? {
         id: getSenderMessage(msg, wbot),

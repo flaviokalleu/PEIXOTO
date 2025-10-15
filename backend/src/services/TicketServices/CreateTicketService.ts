@@ -13,6 +13,8 @@ import CheckContactOpenTickets from "../../helpers/CheckContactOpenTickets";
 
 import CreateLogTicketService from "./CreateLogTicketService";
 import ShowTicketService from "./ShowTicketService";
+import AutoDistributeQueue from "../../helpers/AutoDistributeQueue";
+import { isNil } from "lodash";
 
 interface Request {
   contactId: number;
@@ -56,6 +58,18 @@ const CreateTicketService = async ({
 
   const { isGroup } = await ShowContactService(contactId, companyId);
 
+  // Se não foi passada uma fila, faz a distribuição automática
+  let finalQueueId = queueId;
+  if (isNil(queueId) || queueId === 0) {
+    const autoQueueId = await AutoDistributeQueue({ 
+      companyId 
+    });
+    if (autoQueueId) {
+      finalQueueId = autoQueueId;
+      console.log(`[CreateTicketService] Distribuindo automaticamente para fila ${autoQueueId}`);
+    }
+  }
+
   let ticket = await Ticket.create({
     contactId,
     companyId,
@@ -64,7 +78,7 @@ const CreateTicketService = async ({
     isGroup,
     userId,
     isBot: true,
-    queueId,
+    queueId: finalQueueId,
     status: isGroup ? "group" : "open",
     isActiveDemand: true
   });
@@ -91,7 +105,7 @@ const CreateTicketService = async ({
 
   await CreateLogTicketService({
     userId,
-    queueId,
+    queueId: finalQueueId,
     ticketId: ticket.id,
     type: "create"
   });
